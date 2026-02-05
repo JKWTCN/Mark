@@ -6,20 +6,312 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>1200</width>
+    <height>800</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>技能就绪状态标注工具</string>
   </property>
-  <widget class="QWidget" name="centralwidget"/>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <item>
+     <widget class="QWidget" name="controlPanel">
+      <property name="maximumSize">
+       <size>
+        <width>300</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="controlPanelLayout">
+       <item>
+        <widget class="QGroupBox" name="configGroup">
+         <property name="title">
+          <string>配置信息</string>
+         </property>
+         <layout class="QFormLayout" name="formLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="label">
+            <property name="text">
+             <string>配置名称:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="configNameEdit"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label_2">
+            <property name="text">
+             <string>屏幕宽度:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="screenWidthSpin">
+            <property name="minimum">
+             <number>800</number>
+            </property>
+            <property name="maximum">
+             <number>7680</number>
+            </property>
+            <property name="value">
+             <number>1920</number>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_3">
+            <property name="text">
+             <string>屏幕高度:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QSpinBox" name="screenHeightSpin">
+            <property name="minimum">
+             <number>600</number>
+            </property>
+            <property name="maximum">
+             <number>4320</number>
+            </property>
+            <property name="value">
+             <number>1080</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="skillGroup">
+         <property name="title">
+          <string>技能标注</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout">
+          <item>
+           <widget class="QComboBox" name="skillCombo">
+            <item>
+             <property name="text">
+              <string>技能1 (skill1)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>技能2 (skill2)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>技能3 (skill3)</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>技能4 (skill4)</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="loadImageBtn">
+            <property name="text">
+             <string>加载图片</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="loadConfigBtn">
+            <property name="text">
+             <string>加载配置</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="saveConfigBtn">
+            <property name="text">
+             <string>保存配置</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="clearPointsBtn">
+            <property name="text">
+             <string>清空当前技能点</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="pointsGroup">
+         <property name="title">
+          <string>检测点列表</string>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>200</height>
+          </size>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <item>
+           <widget class="QListWidget" name="pointsList"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="zoomGroup">
+         <property name="title">
+          <string>缩放控制</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_4">
+          <item>
+           <layout class="QHBoxLayout" name="zoomButtonsLayout">
+            <item>
+             <widget class="QPushButton" name="zoomOutBtn">
+              <property name="text">
+               <string>-</string>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>40</width>
+                <height>16777215</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSlider" name="zoomSlider">
+              <property name="minimum">
+               <number>10</number>
+              </property>
+              <property name="maximum">
+               <number>200</number>
+              </property>
+              <property name="value">
+               <number>100</number>
+              </property>
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="zoomInBtn">
+              <property name="text">
+               <string>+</string>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>40</width>
+                <height>16777215</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="zoomLabel">
+            <property name="text">
+             <string>缩放: 100%</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="fitToScreenBtn">
+            <property name="text">
+             <string>适应屏幕</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="actualSizeBtn">
+            <property name="text">
+             <string>实际大小</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QWidget" name="imageContainer">
+      <layout class="QVBoxLayout" name="verticalLayout_3">
+       <item>
+        <widget class="QScrollArea" name="scrollArea">
+         <property name="widgetResizable">
+          <bool>true</bool>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+         <widget class="QWidget" name="scrollAreaContents">
+          <property name="geometry">
+           <rect>
+            <x>0</x>
+            <y>0</y>
+            <width>697</width>
+            <height>658</height>
+           </rect>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_5">
+           <item>
+            <widget class="QLabel" name="imageLabel">
+             <property name="text">
+              <string>拖放图片到此处或点击加载图片按钮</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>400</width>
+               <height>300</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">background-color: #f0f0f0; border: 2px dashed #999;</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>1200</width>
      <height>20</height>
     </rect>
    </property>
