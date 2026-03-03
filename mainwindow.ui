@@ -90,6 +90,48 @@
          </property>
          <layout class="QVBoxLayout" name="verticalLayout">
           <item>
+           <widget class="QLabel" name="heroLabel">
+            <property name="text">
+             <string>选择英雄:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="heroCombo"/>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="heroButtonsLayout">
+            <item>
+             <widget class="QPushButton" name="addHeroBtn">
+              <property name="text">
+               <string>添加英雄</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="deleteHeroBtn">
+              <property name="text">
+               <string>删除英雄</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QPushButton" name="applyToAllBtn">
+            <property name="text">
+             <string>应用到全部英雄</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="skillLabel">
+            <property name="text">
+             <string>选择技能:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QComboBox" name="skillCombo">
             <item>
              <property name="text">
@@ -189,7 +231,7 @@
                <number>10</number>
               </property>
               <property name="maximum">
-               <number>200</number>
+               <number>600</number>
               </property>
               <property name="value">
                <number>100</number>

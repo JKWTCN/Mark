@@ -55,6 +55,9 @@ public:
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 
@@ -64,7 +67,11 @@ private slots:
     void saveConfig();
     void clearCurrentSkillPoints();
     void onSkillChanged(int index);
+    void onHeroChanged(int index);
     void onPointsListItemDoubleClicked(QListWidgetItem *item);
+    void onAddHeroClicked();
+    void onDeleteHeroClicked();
+    void onApplyToAllClicked();
     void zoomIn();
     void zoomOut();
     void zoomChanged(int value);
@@ -75,13 +82,26 @@ private:
     Ui::MainWindow *ui;
     QImage currentImage;
     QString currentSkill;
+    QString currentHero;
+    QMap<QString, QMap<QString, QList<DetectionPoint>>> heroSkillPoints;
     QMap<QString, QList<DetectionPoint>> skillPoints;
     double currentZoom = 1.0;
 
+    // Drag functionality
+    bool isDragging = false;
+    QPoint dragStartPos;
+    QPoint scrollStartPos;
+
     void setupConnections();
+    void loadHeroList();
+    void updateHeroCombo();
     void updatePointsList();
     QString getCurrentSkill() const;
+    QString getCurrentHero() const;
     void addDetectionPoint(const QPoint& pos);
+    void addHero(const QString& heroName);
+    void deleteHero(const QString& heroName);
+    void applyToAllHeroes();
     QColor getPixelColor(const QPoint& pos) const;
     void drawDetectionPoints();
     bool loadJsonConfig(const QString& filePath);
