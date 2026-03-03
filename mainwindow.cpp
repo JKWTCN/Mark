@@ -55,6 +55,7 @@ void MainWindow::setupConnections()
     connect(ui->pointsList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
         this->onPointsListItemDoubleClicked(item);
     });
+    connect(ui->pointsList, &QListWidget::itemSelectionChanged, this, &MainWindow::onPointsListSelectionChanged);
     connect(ui->zoomInBtn, &QPushButton::clicked, this, &MainWindow::zoomIn);
     connect(ui->zoomOutBtn, &QPushButton::clicked, this, &MainWindow::zoomOut);
     connect(ui->zoomSlider, &QSlider::valueChanged, this, &MainWindow::zoomChanged);
@@ -385,13 +386,20 @@ void MainWindow::updateImageDisplay()
 
     QImage displayImage = currentImage.copy();
     QPainter painter(&displayImage);
-    painter.setPen(QPen(Qt::red, 2));
 
     QString hero = getCurrentHero();
     QString skill = getCurrentSkill();
 
     if (heroSkillPoints.contains(hero) && heroSkillPoints[hero].contains(skill)) {
-        for (const auto& point : heroSkillPoints[hero][skill]) {
+        const auto& points = heroSkillPoints[hero][skill];
+        for (int i = 0; i < points.size(); ++i) {
+            const auto& point = points[i];
+            // 选中的点用蓝色，其他点用红色
+            if (i == selectedPointIndex) {
+                painter.setPen(QPen(Qt::blue, 3));
+            } else {
+                painter.setPen(QPen(Qt::red, 2));
+            }
             painter.drawEllipse(point.x - 2, point.y - 2, 4, 4);
         }
     }
@@ -430,6 +438,7 @@ void MainWindow::updatePointsList()
 void MainWindow::onSkillChanged(int index)
 {
     currentSkill = getCurrentSkill();
+    selectedPointIndex = -1;
     updatePointsList();
     drawDetectionPoints();
 }
@@ -437,6 +446,7 @@ void MainWindow::onSkillChanged(int index)
 void MainWindow::onHeroChanged(int index)
 {
     currentHero = getCurrentHero();
+    selectedPointIndex = -1;
 
     if (heroSkillPoints.contains(currentHero)) {
         skillPoints = heroSkillPoints[currentHero];
@@ -1005,6 +1015,17 @@ void MainWindow::onEditPointClicked()
 
     // 调用双击事件的处理函数
     onPointsListItemDoubleClicked(item);
+}
+
+void MainWindow::onPointsListSelectionChanged()
+{
+    QList<QListWidgetItem*> selectedItems = ui->pointsList->selectedItems();
+    if (selectedItems.isEmpty()) {
+        selectedPointIndex = -1;
+    } else {
+        selectedPointIndex = ui->pointsList->row(selectedItems.first());
+    }
+    drawDetectionPoints();
 }
 
 void MainWindow::updatePointsRGBFromImage()

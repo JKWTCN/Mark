@@ -69,6 +69,7 @@ private slots:
     void onSkillChanged(int index);
     void onHeroChanged(int index);
     void onPointsListItemDoubleClicked(QListWidgetItem *item);
+    void onPointsListSelectionChanged();
     void onAddHeroClicked();
     void onDeleteHeroClicked();
     void onApplyToAllClicked();
@@ -94,6 +95,9 @@ private:
     bool isDragging = false;
     QPoint dragStartPos;
     QPoint scrollStartPos;
+
+    // Selected point index in the list (-1 means no selection)
+    int selectedPointIndex = -1;
 
     void setupConnections();
     void loadHeroList();
