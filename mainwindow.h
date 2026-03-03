@@ -77,6 +77,7 @@ private slots:
     void zoomChanged(int value);
     void fitToScreen();
     void actualSize();
+    void onAddPointManuallyClicked();
 
 private:
     Ui::MainWindow *ui;

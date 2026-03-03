@@ -201,6 +201,13 @@
           <item>
            <widget class="QListWidget" name="pointsList"/>
           </item>
+          <item>
+           <widget class="QPushButton" name="addPointManuallyBtn">
+            <property name="text">
+             <string>手动添加检测点</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>

@@ -14,6 +14,11 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QScrollBar>
+#include <QDialog>
+#include <QFormLayout>
+#include <QDialogButtonBox>
+#include <QSpinBox>
+#include <QLabel>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -55,6 +60,7 @@ void MainWindow::setupConnections()
     connect(ui->zoomSlider, &QSlider::valueChanged, this, &MainWindow::zoomChanged);
     connect(ui->fitToScreenBtn, &QPushButton::clicked, this, &MainWindow::fitToScreen);
     connect(ui->actualSizeBtn, &QPushButton::clicked, this, &MainWindow::actualSize);
+    connect(ui->addPointManuallyBtn, &QPushButton::clicked, this, &MainWindow::onAddPointManuallyClicked);
 }
 
 QString MainWindow::getCurrentSkill() const
@@ -842,4 +848,59 @@ void MainWindow::fitToScreen()
 void MainWindow::actualSize()
 {
     setZoom(1.0);
+}
+
+void MainWindow::onAddPointManuallyClicked()
+{
+    if (currentImage.isNull()) {
+        QMessageBox::warning(this, "错误", "请先加载图片");
+        return;
+    }
+
+    // 创建对话框
+    QDialog dialog(this);
+    dialog.setWindowTitle("手动添加检测点");
+
+    QFormLayout* layout = new QFormLayout(&dialog);
+
+    // X坐标输入
+    QSpinBox* xSpinBox = new QSpinBox(&dialog);
+    xSpinBox->setRange(0, currentImage.width() - 1);
+    xSpinBox->setValue(currentImage.width() / 2);
+    xSpinBox->setPrefix("X: ");
+    layout->addRow("X坐标:", xSpinBox);
+
+    // Y坐标输入
+    QSpinBox* ySpinBox = new QSpinBox(&dialog);
+    ySpinBox->setRange(0, currentImage.height() - 1);
+    ySpinBox->setValue(currentImage.height() / 2);
+    ySpinBox->setPrefix("Y: ");
+    layout->addRow("Y坐标:", ySpinBox);
+
+    // 添加图片尺寸提示
+    QLabel* sizeHint = new QLabel(QString("图片尺寸: %1 x %2").arg(currentImage.width()).arg(currentImage.height()), &dialog);
+    sizeHint->setStyleSheet("color: gray; font-size: 10px;");
+    layout->addRow(sizeHint);
+
+    // 添加按钮
+    QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addRow(buttonBox);
+
+    connect(buttonBox->button(QDialogButtonBox::Ok), &QPushButton::clicked, &dialog, &QDialog::accept);
+    connect(buttonBox->button(QDialogButtonBox::Cancel), &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    // 显示对话框
+    if (dialog.exec() == QDialog::Accepted) {
+        int x = xSpinBox->value();
+        int y = ySpinBox->value();
+
+        // 验证坐标
+        if (x < 0 || x >= currentImage.width() || y < 0 || y >= currentImage.height()) {
+            QMessageBox::warning(this, "错误", "坐标超出图片范围");
+            return;
+        }
+
+        // 添加检测点
+        addDetectionPoint(QPoint(x, y));
+    }
 }
