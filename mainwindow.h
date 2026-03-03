@@ -78,6 +78,8 @@ private slots:
     void fitToScreen();
     void actualSize();
     void onAddPointManuallyClicked();
+    void onDeletePointClicked();
+    void onEditPointClicked();
 
 private:
     Ui::MainWindow *ui;

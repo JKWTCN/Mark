@@ -61,6 +61,8 @@ void MainWindow::setupConnections()
     connect(ui->fitToScreenBtn, &QPushButton::clicked, this, &MainWindow::fitToScreen);
     connect(ui->actualSizeBtn, &QPushButton::clicked, this, &MainWindow::actualSize);
     connect(ui->addPointManuallyBtn, &QPushButton::clicked, this, &MainWindow::onAddPointManuallyClicked);
+    connect(ui->deletePointBtn, &QPushButton::clicked, this, &MainWindow::onDeletePointClicked);
+    connect(ui->editPointBtn, &QPushButton::clicked, this, &MainWindow::onEditPointClicked);
 }
 
 QString MainWindow::getCurrentSkill() const
@@ -451,12 +453,66 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
     if (heroSkillPoints.contains(hero) && heroSkillPoints[hero].contains(skill)) {
         int index = ui->pointsList->row(item);
         if (index >= 0 && index < heroSkillPoints[hero][skill].size()) {
-            auto confirm = QMessageBox::question(this, "确认删除",
-                "确定要删除这个检测点吗？",
-                QMessageBox::Yes | QMessageBox::No);
+            // 编辑检测点
+            DetectionPoint& point = heroSkillPoints[hero][skill][index];
 
-            if (confirm == QMessageBox::Yes) {
-                heroSkillPoints[hero][skill].removeAt(index);
+            QDialog dialog(this);
+            dialog.setWindowTitle("编辑检测点");
+
+            QFormLayout* layout = new QFormLayout(&dialog);
+
+            // X坐标输入
+            QSpinBox* xSpinBox = new QSpinBox(&dialog);
+            xSpinBox->setRange(0, currentImage.isNull() ? 1920 : currentImage.width() - 1);
+            xSpinBox->setValue(point.x);
+            layout->addRow("X坐标:", xSpinBox);
+
+            // Y坐标输入
+            QSpinBox* ySpinBox = new QSpinBox(&dialog);
+            ySpinBox->setRange(0, currentImage.isNull() ? 1080 : currentImage.height() - 1);
+            ySpinBox->setValue(point.y);
+            layout->addRow("Y坐标:", ySpinBox);
+
+            // 显示当前RGB颜色（只读）
+            QLabel* rgbLabel = new QLabel(QString("RGB(%1, %2, %3)").arg(point.r).arg(point.g).arg(point.b), &dialog);
+            rgbLabel->setStyleSheet("color: gray; padding: 5px; background-color: rgb(%1, %2, %3);");
+            layout->addRow("当前颜色:", rgbLabel);
+
+            // 提示信息
+            QLabel* hintLabel = new QLabel("RGB颜色将自动从图片获取", &dialog);
+            hintLabel->setStyleSheet("color: blue; font-size: 10px;");
+            layout->addRow(hintLabel);
+
+            // 添加图片尺寸提示
+            if (!currentImage.isNull()) {
+                QLabel* sizeHint = new QLabel(QString("图片尺寸: %1 x %2").arg(currentImage.width()).arg(currentImage.height()), &dialog);
+                sizeHint->setStyleSheet("color: gray; font-size: 10px;");
+                layout->addRow(sizeHint);
+            }
+
+            // 添加按钮
+            QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+            layout->addRow(buttonBox);
+
+            connect(buttonBox->button(QDialogButtonBox::Ok), &QPushButton::clicked, &dialog, &QDialog::accept);
+            connect(buttonBox->button(QDialogButtonBox::Cancel), &QPushButton::clicked, &dialog, &QDialog::reject);
+
+            // 显示对话框
+            if (dialog.exec() == QDialog::Accepted) {
+                // 更新坐标
+                int newX = xSpinBox->value();
+                int newY = ySpinBox->value();
+
+                // 从图片获取新坐标的RGB颜色
+                QColor newColor = getPixelColor(QPoint(newX, newY));
+
+                // 更新检测点
+                point.x = newX;
+                point.y = newY;
+                point.r = newColor.red();
+                point.g = newColor.green();
+                point.b = newColor.blue();
+
                 skillPoints[skill] = heroSkillPoints[hero][skill];
                 updatePointsList();
                 drawDetectionPoints();
@@ -903,4 +959,44 @@ void MainWindow::onAddPointManuallyClicked()
         // 添加检测点
         addDetectionPoint(QPoint(x, y));
     }
+}
+
+void MainWindow::onDeletePointClicked()
+{
+    QListWidgetItem* item = ui->pointsList->currentItem();
+    if (!item) {
+        QMessageBox::warning(this, "提示", "请先选择要删除的检测点");
+        return;
+    }
+
+    QString hero = getCurrentHero();
+    QString skill = getCurrentSkill();
+
+    if (heroSkillPoints.contains(hero) && heroSkillPoints[hero].contains(skill)) {
+        int index = ui->pointsList->row(item);
+        if (index >= 0 && index < heroSkillPoints[hero][skill].size()) {
+            auto confirm = QMessageBox::question(this, "确认删除",
+                "确定要删除这个检测点吗？",
+                QMessageBox::Yes | QMessageBox::No);
+
+            if (confirm == QMessageBox::Yes) {
+                heroSkillPoints[hero][skill].removeAt(index);
+                skillPoints[skill] = heroSkillPoints[hero][skill];
+                updatePointsList();
+                drawDetectionPoints();
+            }
+        }
+    }
+}
+
+void MainWindow::onEditPointClicked()
+{
+    QListWidgetItem* item = ui->pointsList->currentItem();
+    if (!item) {
+        QMessageBox::warning(this, "提示", "请先选择要编辑的检测点");
+        return;
+    }
+
+    // 调用双击事件的处理函数
+    onPointsListItemDoubleClicked(item);
 }
