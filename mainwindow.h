@@ -111,5 +111,6 @@ private:
     bool saveJsonConfig(const QString& filePath);
     void updateImageDisplay();
     void setZoom(double zoom);
+    void updatePointsRGBFromImage();
 };
 #endif // MAINWINDOW_H

@@ -165,6 +165,9 @@ void MainWindow::loadImage()
             // 保持当前缩放比例，不调用 fitToScreen()
             updateImageDisplay();
 
+            // 更新所有检测点的RGB值
+            updatePointsRGBFromImage();
+
             // 恢复滚动条位置（尽量恢复）
             hBar->setValue(qMin(oldHScroll, hBar->maximum()));
             vBar->setValue(qMin(oldVScroll, vBar->maximum()));
@@ -569,6 +572,9 @@ void MainWindow::dropEvent(QDropEvent *event)
                     ui->imageLabel->setText("");
                     // 保持当前缩放比例，不调用 fitToScreen()
                     updateImageDisplay();
+
+                    // 更新所有检测点的RGB值
+                    updatePointsRGBFromImage();
 
                     // 恢复滚动条位置（尽量恢复）
                     hBar->setValue(qMin(oldHScroll, hBar->maximum()));
@@ -999,4 +1005,36 @@ void MainWindow::onEditPointClicked()
 
     // 调用双击事件的处理函数
     onPointsListItemDoubleClicked(item);
+}
+
+void MainWindow::updatePointsRGBFromImage()
+{
+    if (currentImage.isNull()) {
+        return;
+    }
+
+    QString hero = getCurrentHero();
+    QString skill = getCurrentSkill();
+
+    if (heroSkillPoints.contains(hero)) {
+        for (QString& skillKey : heroSkillPoints[hero].keys()) {
+            QList<DetectionPoint>& points = heroSkillPoints[hero][skillKey];
+            for (DetectionPoint& point : points) {
+                // 检查坐标是否在图片范围内
+                if (point.x >= 0 && point.x < currentImage.width() &&
+                    point.y >= 0 && point.y < currentImage.height()) {
+                    // 从新图片获取该坐标的RGB值
+                    QColor color = currentImage.pixel(point.x, point.y);
+                    point.r = color.red();
+                    point.g = color.green();
+                    point.b = color.blue();
+                }
+            }
+            // 更新skillPoints
+            skillPoints[skillKey] = heroSkillPoints[hero][skillKey];
+        }
+    }
+
+    // 更新显示
+    updatePointsList();
 }
