@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>技能就绪状态标注工具</string>
+   <string>检测点标注工具</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
@@ -84,77 +84,11 @@
         </widget>
        </item>
        <item>
-        <widget class="QGroupBox" name="skillGroup">
+        <widget class="QGroupBox" name="buttonsGroup">
          <property name="title">
-          <string>技能标注</string>
+          <string>操作</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout">
-          <item>
-           <widget class="QLabel" name="heroLabel">
-            <property name="text">
-             <string>选择英雄:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="heroCombo"/>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="heroButtonsLayout">
-            <item>
-             <widget class="QPushButton" name="addHeroBtn">
-              <property name="text">
-               <string>添加英雄</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="deleteHeroBtn">
-              <property name="text">
-               <string>删除英雄</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <widget class="QPushButton" name="applyToAllBtn">
-            <property name="text">
-             <string>应用到全部英雄</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="skillLabel">
-            <property name="text">
-             <string>选择技能:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QComboBox" name="skillCombo">
-            <item>
-             <property name="text">
-              <string>技能1 (skill1)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>技能2 (skill2)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>技能3 (skill3)</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>技能4 (skill4)</string>
-             </property>
-            </item>
-           </widget>
-          </item>
           <item>
            <widget class="QPushButton" name="loadImageBtn">
             <property name="text">
@@ -173,13 +107,6 @@
            <widget class="QPushButton" name="saveConfigBtn">
             <property name="text">
              <string>保存配置</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="clearPointsBtn">
-            <property name="text">
-             <string>清空当前技能点</string>
             </property>
            </widget>
           </item>
@@ -223,6 +150,13 @@
            <widget class="QPushButton" name="addPointManuallyBtn">
             <property name="text">
              <string>手动添加检测点</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="clearPointsBtn">
+            <property name="text">
+             <string>清空所有检测点</string>
             </property>
            </widget>
           </item>

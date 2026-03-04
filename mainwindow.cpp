@@ -27,10 +27,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     setAcceptDrops(true);
 
-    currentSkill = "skill1";
-    currentHero = "Phoenix";
     setupConnections();
-    loadHeroList();
 
     ui->imageLabel->setMouseTracking(true);
     ui->imageLabel->installEventFilter(this);
@@ -46,12 +43,7 @@ void MainWindow::setupConnections()
     connect(ui->loadImageBtn, &QPushButton::clicked, this, &MainWindow::loadImage);
     connect(ui->loadConfigBtn, &QPushButton::clicked, this, &MainWindow::loadConfig);
     connect(ui->saveConfigBtn, &QPushButton::clicked, this, &MainWindow::saveConfig);
-    connect(ui->clearPointsBtn, &QPushButton::clicked, this, &MainWindow::clearCurrentSkillPoints);
-    connect(ui->skillCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onSkillChanged);
-    connect(ui->heroCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onHeroChanged);
-    connect(ui->addHeroBtn, &QPushButton::clicked, this, &MainWindow::onAddHeroClicked);
-    connect(ui->deleteHeroBtn, &QPushButton::clicked, this, &MainWindow::onDeleteHeroClicked);
-    connect(ui->applyToAllBtn, &QPushButton::clicked, this, &MainWindow::onApplyToAllClicked);
+    connect(ui->clearPointsBtn, &QPushButton::clicked, this, &MainWindow::clearAllPoints);
     connect(ui->pointsList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
         this->onPointsListItemDoubleClicked(item);
     });
@@ -64,88 +56,6 @@ void MainWindow::setupConnections()
     connect(ui->addPointManuallyBtn, &QPushButton::clicked, this, &MainWindow::onAddPointManuallyClicked);
     connect(ui->deletePointBtn, &QPushButton::clicked, this, &MainWindow::onDeletePointClicked);
     connect(ui->editPointBtn, &QPushButton::clicked, this, &MainWindow::onEditPointClicked);
-}
-
-QString MainWindow::getCurrentSkill() const
-{
-    switch (ui->skillCombo->currentIndex()) {
-        case 0: return "skill1";
-        case 1: return "skill2";
-        case 2: return "skill3";
-        case 3: return "skill4";
-        default: return "skill1";
-    }
-}
-
-QString MainWindow::getCurrentHero() const
-{
-    return ui->heroCombo->currentText();
-}
-
-void MainWindow::loadHeroList()
-{
-    QFile heroFile("D:/Temporary/2602/05/valorant_hero.json");
-    if (heroFile.open(QIODevice::ReadOnly)) {
-        QByteArray data = heroFile.readAll();
-        heroFile.close();
-
-        QJsonParseError error;
-        QJsonDocument doc = QJsonDocument::fromJson(data, &error);
-        if (error.error == QJsonParseError::NoError && doc.isObject()) {
-            QJsonObject root = doc.object();
-            if (root.contains("viewMode") && root["viewMode"].isArray()) {
-                QJsonArray viewModeArray = root["viewMode"].toArray();
-                if (!viewModeArray.isEmpty() && viewModeArray[0].isObject()) {
-                    QJsonObject viewModeObj = viewModeArray[0].toObject();
-                    if (viewModeObj.contains("hero") && viewModeObj["hero"].isObject()) {
-                        QJsonObject heroesObj = viewModeObj["hero"].toObject();
-                        QStringList heroes = heroesObj.keys();
-                        ui->heroCombo->addItems(heroes);
-                        if (!heroes.isEmpty()) {
-                            currentHero = heroes.first();
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (ui->heroCombo->count() == 0) {
-        ui->heroCombo->addItem("Phoenix");
-        currentHero = "Phoenix";
-    }
-
-    updateHeroCombo();
-}
-
-void MainWindow::updateHeroCombo()
-{
-    if (heroSkillPoints.isEmpty()) {
-        return;
-    }
-
-    QString currentText = ui->heroCombo->currentText();
-    ui->heroCombo->clear();
-
-    QSet<QString> allHeroes;
-    for (int i = 0; i < ui->heroCombo->count(); ++i) {
-        allHeroes.insert(ui->heroCombo->itemText(i));
-    }
-
-    for (const QString& hero : heroSkillPoints.keys()) {
-        if (!allHeroes.contains(hero)) {
-            allHeroes.insert(hero);
-        }
-    }
-
-    QStringList heroList = allHeroes.values();
-    std::sort(heroList.begin(), heroList.end());
-    ui->heroCombo->addItems(heroList);
-
-    int index = ui->heroCombo->findText(currentText);
-    if (index >= 0) {
-        ui->heroCombo->setCurrentIndex(index);
-    }
 }
 
 void MainWindow::loadImage()
@@ -350,17 +260,7 @@ void MainWindow::addDetectionPoint(const QPoint& pos)
 {
     QColor color = getPixelColor(pos);
     DetectionPoint point(pos.x(), pos.y(), color.red(), color.green(), color.blue());
-
-    QString hero = getCurrentHero();
-    QString skill = getCurrentSkill();
-
-    if (!heroSkillPoints.contains(hero)) {
-        heroSkillPoints[hero] = QMap<QString, QList<DetectionPoint>>();
-    }
-    heroSkillPoints[hero][skill].append(point);
-
-    skillPoints[skill] = heroSkillPoints[hero][skill];
-
+    detectionPoints.append(point);
     updatePointsList();
     drawDetectionPoints();
 }
@@ -387,21 +287,15 @@ void MainWindow::updateImageDisplay()
     QImage displayImage = currentImage.copy();
     QPainter painter(&displayImage);
 
-    QString hero = getCurrentHero();
-    QString skill = getCurrentSkill();
-
-    if (heroSkillPoints.contains(hero) && heroSkillPoints[hero].contains(skill)) {
-        const auto& points = heroSkillPoints[hero][skill];
-        for (int i = 0; i < points.size(); ++i) {
-            const auto& point = points[i];
-            // 选中的点用蓝色，其他点用红色
-            if (i == selectedPointIndex) {
-                painter.setPen(QPen(Qt::blue, 3));
-            } else {
-                painter.setPen(QPen(Qt::red, 2));
-            }
-            painter.drawEllipse(point.x - 2, point.y - 2, 4, 4);
+    for (int i = 0; i < detectionPoints.size(); ++i) {
+        const auto& point = detectionPoints[i];
+        // 选中的点用蓝色，其他点用红色
+        if (i == selectedPointIndex) {
+            painter.setPen(QPen(Qt::blue, 3));
+        } else {
+            painter.setPen(QPen(Qt::red, 2));
         }
+        painter.drawEllipse(point.x - 2, point.y - 2, 4, 4);
     }
 
     QPixmap pixmap = QPixmap::fromImage(displayImage);
@@ -416,138 +310,99 @@ void MainWindow::updateImageDisplay()
 void MainWindow::updatePointsList()
 {
     ui->pointsList->clear();
-    QString hero = getCurrentHero();
-    QString skill = getCurrentSkill();
 
-    if (heroSkillPoints.contains(hero) && heroSkillPoints[hero].contains(skill)) {
-        const auto& points = heroSkillPoints[hero][skill];
-        for (int i = 0; i < points.size(); ++i) {
-            const auto& point = points[i];
-            QString text = QString("点 %1: (%2, %3) RGB(%4, %5, %6)")
-                .arg(i + 1)
-                .arg(point.x)
-                .arg(point.y)
-                .arg(point.r)
-                .arg(point.g)
-                .arg(point.b);
-            ui->pointsList->addItem(text);
-        }
+    for (int i = 0; i < detectionPoints.size(); ++i) {
+        const auto& point = detectionPoints[i];
+        QString text = QString("点 %1: (%2, %3) RGB(%4, %5, %6)")
+            .arg(i + 1)
+            .arg(point.x)
+            .arg(point.y)
+            .arg(point.r)
+            .arg(point.g)
+            .arg(point.b);
+        ui->pointsList->addItem(text);
     }
-}
-
-void MainWindow::onSkillChanged(int index)
-{
-    currentSkill = getCurrentSkill();
-    selectedPointIndex = -1;
-    updatePointsList();
-    drawDetectionPoints();
-}
-
-void MainWindow::onHeroChanged(int index)
-{
-    currentHero = getCurrentHero();
-    selectedPointIndex = -1;
-
-    if (heroSkillPoints.contains(currentHero)) {
-        skillPoints = heroSkillPoints[currentHero];
-    } else {
-        skillPoints.clear();
-    }
-
-    updatePointsList();
-    drawDetectionPoints();
 }
 
 void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
 {
-    QString hero = getCurrentHero();
-    QString skill = getCurrentSkill();
+    int index = ui->pointsList->row(item);
+    if (index >= 0 && index < detectionPoints.size()) {
+        // 编辑检测点
+        DetectionPoint& point = detectionPoints[index];
 
-    if (heroSkillPoints.contains(hero) && heroSkillPoints[hero].contains(skill)) {
-        int index = ui->pointsList->row(item);
-        if (index >= 0 && index < heroSkillPoints[hero][skill].size()) {
-            // 编辑检测点
-            DetectionPoint& point = heroSkillPoints[hero][skill][index];
+        QDialog dialog(this);
+        dialog.setWindowTitle("编辑检测点");
 
-            QDialog dialog(this);
-            dialog.setWindowTitle("编辑检测点");
+        QFormLayout* layout = new QFormLayout(&dialog);
 
-            QFormLayout* layout = new QFormLayout(&dialog);
+        // X坐标输入
+        QSpinBox* xSpinBox = new QSpinBox(&dialog);
+        xSpinBox->setRange(0, currentImage.isNull() ? 1920 : currentImage.width() - 1);
+        xSpinBox->setValue(point.x);
+        layout->addRow("X坐标:", xSpinBox);
 
-            // X坐标输入
-            QSpinBox* xSpinBox = new QSpinBox(&dialog);
-            xSpinBox->setRange(0, currentImage.isNull() ? 1920 : currentImage.width() - 1);
-            xSpinBox->setValue(point.x);
-            layout->addRow("X坐标:", xSpinBox);
+        // Y坐标输入
+        QSpinBox* ySpinBox = new QSpinBox(&dialog);
+        ySpinBox->setRange(0, currentImage.isNull() ? 1080 : currentImage.height() - 1);
+        ySpinBox->setValue(point.y);
+        layout->addRow("Y坐标:", ySpinBox);
 
-            // Y坐标输入
-            QSpinBox* ySpinBox = new QSpinBox(&dialog);
-            ySpinBox->setRange(0, currentImage.isNull() ? 1080 : currentImage.height() - 1);
-            ySpinBox->setValue(point.y);
-            layout->addRow("Y坐标:", ySpinBox);
+        // 显示当前RGB颜色（只读）
+        QLabel* rgbLabel = new QLabel(QString("RGB(%1, %2, %3)").arg(point.r).arg(point.g).arg(point.b), &dialog);
+        rgbLabel->setStyleSheet("color: gray; padding: 5px; background-color: rgb(%1, %2, %3);");
+        layout->addRow("当前颜色:", rgbLabel);
 
-            // 显示当前RGB颜色（只读）
-            QLabel* rgbLabel = new QLabel(QString("RGB(%1, %2, %3)").arg(point.r).arg(point.g).arg(point.b), &dialog);
-            rgbLabel->setStyleSheet("color: gray; padding: 5px; background-color: rgb(%1, %2, %3);");
-            layout->addRow("当前颜色:", rgbLabel);
+        // 提示信息
+        QLabel* hintLabel = new QLabel("RGB颜色将自动从图片获取", &dialog);
+        hintLabel->setStyleSheet("color: blue; font-size: 10px;");
+        layout->addRow(hintLabel);
 
-            // 提示信息
-            QLabel* hintLabel = new QLabel("RGB颜色将自动从图片获取", &dialog);
-            hintLabel->setStyleSheet("color: blue; font-size: 10px;");
-            layout->addRow(hintLabel);
+        // 添加图片尺寸提示
+        if (!currentImage.isNull()) {
+            QLabel* sizeHint = new QLabel(QString("图片尺寸: %1 x %2").arg(currentImage.width()).arg(currentImage.height()), &dialog);
+            sizeHint->setStyleSheet("color: gray; font-size: 10px;");
+            layout->addRow(sizeHint);
+        }
 
-            // 添加图片尺寸提示
-            if (!currentImage.isNull()) {
-                QLabel* sizeHint = new QLabel(QString("图片尺寸: %1 x %2").arg(currentImage.width()).arg(currentImage.height()), &dialog);
-                sizeHint->setStyleSheet("color: gray; font-size: 10px;");
-                layout->addRow(sizeHint);
-            }
+        // 添加按钮
+        QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        layout->addRow(buttonBox);
 
-            // 添加按钮
-            QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-            layout->addRow(buttonBox);
+        connect(buttonBox->button(QDialogButtonBox::Ok), &QPushButton::clicked, &dialog, &QDialog::accept);
+        connect(buttonBox->button(QDialogButtonBox::Cancel), &QPushButton::clicked, &dialog, &QDialog::reject);
 
-            connect(buttonBox->button(QDialogButtonBox::Ok), &QPushButton::clicked, &dialog, &QDialog::accept);
-            connect(buttonBox->button(QDialogButtonBox::Cancel), &QPushButton::clicked, &dialog, &QDialog::reject);
+        // 显示对话框
+        if (dialog.exec() == QDialog::Accepted) {
+            // 更新坐标
+            int newX = xSpinBox->value();
+            int newY = ySpinBox->value();
 
-            // 显示对话框
-            if (dialog.exec() == QDialog::Accepted) {
-                // 更新坐标
-                int newX = xSpinBox->value();
-                int newY = ySpinBox->value();
+            // 从图片获取新坐标的RGB颜色
+            QColor newColor = getPixelColor(QPoint(newX, newY));
 
-                // 从图片获取新坐标的RGB颜色
-                QColor newColor = getPixelColor(QPoint(newX, newY));
+            // 更新检测点
+            point.x = newX;
+            point.y = newY;
+            point.r = newColor.red();
+            point.g = newColor.green();
+            point.b = newColor.blue();
 
-                // 更新检测点
-                point.x = newX;
-                point.y = newY;
-                point.r = newColor.red();
-                point.g = newColor.green();
-                point.b = newColor.blue();
-
-                skillPoints[skill] = heroSkillPoints[hero][skill];
-                updatePointsList();
-                drawDetectionPoints();
-            }
+            updatePointsList();
+            drawDetectionPoints();
         }
     }
 }
 
-void MainWindow::clearCurrentSkillPoints()
+void MainWindow::clearAllPoints()
 {
-    QString hero = getCurrentHero();
-    QString skill = getCurrentSkill();
-
-    if (heroSkillPoints.contains(hero) && heroSkillPoints[hero].contains(skill) &&
-        !heroSkillPoints[hero][skill].isEmpty()) {
+    if (!detectionPoints.isEmpty()) {
         auto confirm = QMessageBox::question(this, "确认清空",
-            "确定要清空当前技能的所有检测点吗？",
+            "确定要清空所有检测点吗?",
             QMessageBox::Yes | QMessageBox::No);
 
         if (confirm == QMessageBox::Yes) {
-            heroSkillPoints[hero][skill].clear();
-            skillPoints[skill] = heroSkillPoints[hero][skill];
+            detectionPoints.clear();
             updatePointsList();
             drawDetectionPoints();
         }
@@ -596,152 +451,15 @@ void MainWindow::dropEvent(QDropEvent *event)
     event->acceptProposedAction();
 }
 
-void MainWindow::addHero(const QString& heroName)
-{
-    if (heroName.isEmpty()) {
-        return;
-    }
-
-    if (!heroSkillPoints.contains(heroName)) {
-        heroSkillPoints[heroName] = QMap<QString, QList<DetectionPoint>>();
-    }
-
-    if (ui->heroCombo->findText(heroName) == -1) {
-        ui->heroCombo->addItem(heroName);
-    }
-
-    ui->heroCombo->setCurrentText(heroName);
-}
-
-void MainWindow::deleteHero(const QString& heroName)
-{
-    if (heroName.isEmpty()) {
-        return;
-    }
-
-    if (heroSkillPoints.size() <= 1) {
-        QMessageBox::warning(this, "错误", "至少需要保留一个英雄配置");
-        return;
-    }
-
-    auto confirm = QMessageBox::question(this, "确认删除",
-        QString("确定要删除英雄 '%1' 的所有配置吗？").arg(heroName),
-        QMessageBox::Yes | QMessageBox::No);
-
-    if (confirm == QMessageBox::Yes) {
-        heroSkillPoints.remove(heroName);
-        ui->heroCombo->removeItem(ui->heroCombo->findText(heroName));
-
-        if (getCurrentHero() == heroName && ui->heroCombo->count() > 0) {
-            ui->heroCombo->setCurrentIndex(0);
-            onHeroChanged(0);
-        }
-    }
-}
-
-void MainWindow::onAddHeroClicked()
-{
-    bool ok;
-    QString heroName = QInputDialog::getText(this, "添加英雄",
-        "请输入英雄名称:", QLineEdit::Normal, "", &ok);
-
-    if (ok && !heroName.isEmpty()) {
-        if (ui->heroCombo->findText(heroName) != -1) {
-            QMessageBox::warning(this, "错误", "该英雄已存在");
-            return;
-        }
-        addHero(heroName);
-    }
-}
-
-void MainWindow::onDeleteHeroClicked()
-{
-    QString heroName = getCurrentHero();
-    deleteHero(heroName);
-}
-
-void MainWindow::applyToAllHeroes()
-{
-    QString sourceHero = getCurrentHero();
-
-    if (!heroSkillPoints.contains(sourceHero)) {
-        QMessageBox::warning(this, "错误", "当前英雄没有配置数据");
-        return;
-    }
-
-    const auto& sourceSkills = heroSkillPoints[sourceHero];
-    if (sourceSkills.isEmpty()) {
-        QMessageBox::warning(this, "错误", "当前英雄没有配置数据");
-        return;
-    }
-
-    auto confirm = QMessageBox::question(this, "确认应用",
-        QString("确定要将当前英雄 '%1' 的配置应用到所有英雄吗？\n这将覆盖其他英雄的现有配置。").arg(sourceHero),
-        QMessageBox::Yes | QMessageBox::No);
-
-    if (confirm == QMessageBox::Yes) {
-        QStringList allHeroes;
-        if (ui->heroCombo->count() > 0) {
-            for (int i = 0; i < ui->heroCombo->count(); ++i) {
-                allHeroes.append(ui->heroCombo->itemText(i));
-            }
-        } else {
-            allHeroes = heroSkillPoints.keys();
-        }
-
-        for (const QString& hero : allHeroes) {
-            if (hero != sourceHero) {
-                heroSkillPoints[hero] = sourceSkills;
-            }
-        }
-
-        QMessageBox::information(this, "成功", QString("已将 '%1' 的配置应用到 %2 个英雄").arg(sourceHero).arg(allHeroes.size() - 1));
-    }
-}
-
-void MainWindow::onApplyToAllClicked()
-{
-    applyToAllHeroes();
-}
-
 bool MainWindow::saveJsonConfig(const QString& filePath)
 {
     QJsonObject root;
+    QJsonArray pointsArray;
 
-    root["ConfigName"] = ui->configNameEdit->text();
-    root["screenWidth"] = ui->screenWidthSpin->value();
-    root["screenHeight"] = ui->screenHeightSpin->value();
-
-    if (!heroSkillPoints.isEmpty()) {
-        QJsonObject heroObject;
-        for (const QString& hero : heroSkillPoints.keys()) {
-            QJsonObject skillObject;
-            const auto& skills = heroSkillPoints[hero];
-
-            for (const QString& skill : {"skill1", "skill2", "skill3", "skill4"}) {
-                if (skills.contains(skill) && !skills[skill].isEmpty()) {
-                    QJsonArray pointsArray;
-                    for (const auto& point : skills[skill]) {
-                        pointsArray.append(point.toJson());
-                    }
-                    skillObject[skill] = pointsArray;
-                }
-            }
-
-            if (!skillObject.isEmpty()) {
-                heroObject[hero] = skillObject;
-            }
-        }
-
-        if (!heroObject.isEmpty()) {
-            QJsonObject finalObject;
-            finalObject["hero"] = heroObject;
-            root = finalObject;
-            root["ConfigName"] = ui->configNameEdit->text();
-            root["screenWidth"] = ui->screenWidthSpin->value();
-            root["screenHeight"] = ui->screenHeightSpin->value();
-        }
+    for (const auto& point : detectionPoints) {
+        pointsArray.append(point.toJson());
     }
+    root["point"] = pointsArray;
 
     QJsonDocument doc(root);
     QFile file(filePath);
@@ -783,80 +501,25 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
 
     QJsonParseError error;
     QJsonDocument doc = QJsonDocument::fromJson(data, &error);
-    if (error.error != QJsonParseError::NoError) {
-        return false;
-    }
-
-    if (!doc.isObject()) {
+    if (error.error != QJsonParseError::NoError || !doc.isObject()) {
         return false;
     }
 
     QJsonObject root = doc.object();
+    detectionPoints.clear();
 
-    if (root.contains("ConfigName")) {
-        ui->configNameEdit->setText(root["ConfigName"].toString());
-    }
-
-    if (root.contains("screenWidth")) {
-        ui->screenWidthSpin->setValue(root["screenWidth"].toInt());
-    }
-
-    if (root.contains("screenHeight")) {
-        ui->screenHeightSpin->setValue(root["screenHeight"].toInt());
-    }
-
-    heroSkillPoints.clear();
-    skillPoints.clear();
-
-    if (root.contains("hero") && root["hero"].isObject()) {
-        QJsonObject heroObject = root["hero"].toObject();
-        for (const QString& hero : heroObject.keys()) {
-            if (heroObject[hero].isObject()) {
-                QJsonObject skillObject = heroObject[hero].toObject();
-                QMap<QString, QList<DetectionPoint>> skillMap;
-
-                for (const QString& skill : {"skill1", "skill2", "skill3", "skill4"}) {
-                    if (skillObject.contains(skill) && skillObject[skill].isArray()) {
-                        QJsonArray pointsArray = skillObject[skill].toArray();
-                        QList<DetectionPoint> points;
-                        for (const QJsonValue& value : pointsArray) {
-                            if (value.isObject()) {
-                                points.append(DetectionPoint::fromJson(value.toObject()));
-                            }
-                        }
-                        skillMap[skill] = points;
-                    }
-                }
-
-                if (!skillMap.isEmpty()) {
-                    heroSkillPoints[hero] = skillMap;
-                }
+    if (root.contains("point") && root["point"].isArray()) {
+        QJsonArray pointsArray = root["point"].toArray();
+        for (const QJsonValue& value : pointsArray) {
+            if (value.isArray()) {
+                detectionPoints.append(DetectionPoint::fromJson(value.toArray()));
             }
         }
-    } else {
-        for (const QString& skill : {"skill1", "skill2", "skill3", "skill4"}) {
-            if (root.contains(skill) && root[skill].isArray()) {
-                QJsonArray pointsArray = root[skill].toArray();
-                QList<DetectionPoint> points;
-                for (const QJsonValue& value : pointsArray) {
-                    if (value.isObject()) {
-                        points.append(DetectionPoint::fromJson(value.toObject()));
-                    }
-                }
-                skillPoints[skill] = points;
-            }
-        }
-
-        if (!skillPoints.isEmpty()) {
-            heroSkillPoints[currentHero] = skillPoints;
-        }
     }
 
-    if (!heroSkillPoints.isEmpty()) {
-        updateHeroCombo();
-        QString firstHero = heroSkillPoints.keys().first();
-        ui->heroCombo->setCurrentText(firstHero);
-        onHeroChanged(ui->heroCombo->currentIndex());
+    // 如果已加载图片，根据图片更新检测点的RGB值
+    if (!currentImage.isNull()) {
+        updatePointsRGBFromImage();
     }
 
     updatePointsList();
@@ -985,22 +648,16 @@ void MainWindow::onDeletePointClicked()
         return;
     }
 
-    QString hero = getCurrentHero();
-    QString skill = getCurrentSkill();
+    int index = ui->pointsList->row(item);
+    if (index >= 0 && index < detectionPoints.size()) {
+        auto confirm = QMessageBox::question(this, "确认删除",
+            "确定要删除这个检测点吗？",
+            QMessageBox::Yes | QMessageBox::No);
 
-    if (heroSkillPoints.contains(hero) && heroSkillPoints[hero].contains(skill)) {
-        int index = ui->pointsList->row(item);
-        if (index >= 0 && index < heroSkillPoints[hero][skill].size()) {
-            auto confirm = QMessageBox::question(this, "确认删除",
-                "确定要删除这个检测点吗？",
-                QMessageBox::Yes | QMessageBox::No);
-
-            if (confirm == QMessageBox::Yes) {
-                heroSkillPoints[hero][skill].removeAt(index);
-                skillPoints[skill] = heroSkillPoints[hero][skill];
-                updatePointsList();
-                drawDetectionPoints();
-            }
+        if (confirm == QMessageBox::Yes) {
+            detectionPoints.removeAt(index);
+            updatePointsList();
+            drawDetectionPoints();
         }
     }
 }
@@ -1034,25 +691,15 @@ void MainWindow::updatePointsRGBFromImage()
         return;
     }
 
-    QString hero = getCurrentHero();
-    QString skill = getCurrentSkill();
-
-    if (heroSkillPoints.contains(hero)) {
-        for (QString& skillKey : heroSkillPoints[hero].keys()) {
-            QList<DetectionPoint>& points = heroSkillPoints[hero][skillKey];
-            for (DetectionPoint& point : points) {
-                // 检查坐标是否在图片范围内
-                if (point.x >= 0 && point.x < currentImage.width() &&
-                    point.y >= 0 && point.y < currentImage.height()) {
-                    // 从新图片获取该坐标的RGB值
-                    QColor color = currentImage.pixel(point.x, point.y);
-                    point.r = color.red();
-                    point.g = color.green();
-                    point.b = color.blue();
-                }
-            }
-            // 更新skillPoints
-            skillPoints[skillKey] = heroSkillPoints[hero][skillKey];
+    for (DetectionPoint& point : detectionPoints) {
+        // 检查坐标是否在图片范围内
+        if (point.x >= 0 && point.x < currentImage.width() &&
+            point.y >= 0 && point.y < currentImage.height()) {
+            // 从新图片获取该坐标的RGB值
+            QColor color = currentImage.pixel(point.x, point.y);
+            point.r = color.red();
+            point.g = color.green();
+            point.b = color.blue();
         }
     }
 

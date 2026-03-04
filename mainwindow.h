@@ -24,23 +24,23 @@ struct DetectionPoint {
     DetectionPoint() : x(0), y(0), r(0), g(0), b(0) {}
     DetectionPoint(int x, int y, int r, int g, int b) : x(x), y(y), r(r), g(g), b(b) {}
 
-    QJsonObject toJson() const {
-        QJsonObject obj;
-        obj["x"] = x;
-        obj["y"] = y;
-        obj["r"] = r;
-        obj["g"] = g;
-        obj["b"] = b;
-        return obj;
+    QJsonArray toJson() const {
+        QJsonArray arr;
+        arr.append(x);
+        arr.append(y);
+        arr.append(r);
+        arr.append(g);
+        arr.append(b);
+        return arr;
     }
 
-    static DetectionPoint fromJson(const QJsonObject& obj) {
+    static DetectionPoint fromJson(const QJsonArray& arr) {
         return DetectionPoint(
-            obj["x"].toInt(),
-            obj["y"].toInt(),
-            obj["r"].toInt(),
-            obj["g"].toInt(),
-            obj["b"].toInt()
+            arr[0].toInt(),
+            arr[1].toInt(),
+            arr[2].toInt(),
+            arr[3].toInt(),
+            arr[4].toInt()
         );
     }
 };
@@ -65,14 +65,9 @@ private slots:
     void loadImage();
     void loadConfig();
     void saveConfig();
-    void clearCurrentSkillPoints();
-    void onSkillChanged(int index);
-    void onHeroChanged(int index);
+    void clearAllPoints();
     void onPointsListItemDoubleClicked(QListWidgetItem *item);
     void onPointsListSelectionChanged();
-    void onAddHeroClicked();
-    void onDeleteHeroClicked();
-    void onApplyToAllClicked();
     void zoomIn();
     void zoomOut();
     void zoomChanged(int value);
@@ -85,10 +80,7 @@ private slots:
 private:
     Ui::MainWindow *ui;
     QImage currentImage;
-    QString currentSkill;
-    QString currentHero;
-    QMap<QString, QMap<QString, QList<DetectionPoint>>> heroSkillPoints;
-    QMap<QString, QList<DetectionPoint>> skillPoints;
+    QList<DetectionPoint> detectionPoints;
     double currentZoom = 1.0;
 
     // Drag functionality
@@ -100,15 +92,8 @@ private:
     int selectedPointIndex = -1;
 
     void setupConnections();
-    void loadHeroList();
-    void updateHeroCombo();
     void updatePointsList();
-    QString getCurrentSkill() const;
-    QString getCurrentHero() const;
     void addDetectionPoint(const QPoint& pos);
-    void addHero(const QString& heroName);
-    void deleteHero(const QString& heroName);
-    void applyToAllHeroes();
     QColor getPixelColor(const QPoint& pos) const;
     void drawDetectionPoints();
     bool loadJsonConfig(const QString& filePath);
