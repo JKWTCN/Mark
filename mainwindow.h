@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QListWidgetItem>
 #include <QColor>
+#include <QSplitter>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -99,6 +100,9 @@ private:
 
     // Selected point index in the list (-1 means no selection)
     int selectedPointIndex = -1;
+
+    // Splitter for resizable panels
+    QSplitter* splitter;
 
     void setupConnections();
     void updatePointsList();
