@@ -114,6 +114,42 @@
         </widget>
        </item>
        <item>
+        <widget class="QLabel" name="colorFormatLabel">
+         <property name="text">
+          <string>颜色格式:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="colorFormatCombo">
+         <item>
+          <property name="text">
+           <string>RGB</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>HEX #RRGGBB</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>HSL</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>HSV</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>CMYK</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item>
         <widget class="QGroupBox" name="pointsGroup">
          <property name="title">
           <string>检测点列表</string>

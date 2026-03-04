@@ -19,6 +19,7 @@
 #include <QDialogButtonBox>
 #include <QSpinBox>
 #include <QLabel>
+#include <QComboBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -38,12 +39,85 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+QString MainWindow::rgbToHex(int r, int g, int b)
+{
+    return QString("#%1%2%3")
+        .arg(r, 2, 16, QChar('0'))
+        .arg(g, 2, 16, QChar('0'))
+        .arg(b, 2, 16, QChar('0'))
+        .toUpper();
+}
+
+QString MainWindow::rgbToHsl(int r, int g, int b)
+{
+    QColor color(r, g, b);
+    int h, s, l;
+    color.getHsl(&h, &s, &l);
+
+    return QString("HSL(%1°, %2%, %3%)")
+        .arg(h == 0 && r == 0 && g == 0 && b == 0 ? 0 : h)
+        .arg(qRound(s / 2.55))
+        .arg(qRound(l / 2.55));
+}
+
+QString MainWindow::rgbToHsv(int r, int g, int b)
+{
+    QColor color(r, g, b);
+    int h, s, v;
+    color.getHsv(&h, &s, &v);
+
+    return QString("HSV(%1°, %2%, %3%)")
+        .arg(h == 0 && r == 0 && g == 0 && b == 0 ? 0 : h)
+        .arg(qRound(s / 2.55))
+        .arg(qRound(v / 2.55));
+}
+
+QString MainWindow::rgbToCmyk(int r, int g, int b)
+{
+    QColor color(r, g, b);
+    int c, m, y, k;
+    color.getCmyk(&c, &m, &y, &k);
+
+    return QString("CMYK(%1%, %2%, %3%, %4%)")
+        .arg(c)
+        .arg(m)
+        .arg(y)
+        .arg(k);
+}
+
+QString MainWindow::formatColorToString(int r, int g, int b, ColorFormat format)
+{
+    switch (format) {
+        case ColorFormat::RGB:
+            return QString("RGB(%1, %2, %3)").arg(r).arg(g).arg(b);
+        case ColorFormat::HEX:
+            return rgbToHex(r, g, b);
+        case ColorFormat::HSL:
+            return rgbToHsl(r, g, b);
+        case ColorFormat::HSV:
+            return rgbToHsv(r, g, b);
+        case ColorFormat::CMYK:
+            return rgbToCmyk(r, g, b);
+        default:
+            return QString("RGB(%1, %2, %3)").arg(r).arg(g).arg(b);
+    }
+}
+
+ColorFormat MainWindow::getCurrentColorFormat() const
+{
+    int index = ui->colorFormatCombo->currentIndex();
+    return static_cast<ColorFormat>(index);
+}
+
 void MainWindow::setupConnections()
 {
     connect(ui->loadImageBtn, &QPushButton::clicked, this, &MainWindow::loadImage);
     connect(ui->loadConfigBtn, &QPushButton::clicked, this, &MainWindow::loadConfig);
     connect(ui->saveConfigBtn, &QPushButton::clicked, this, &MainWindow::saveConfig);
     connect(ui->clearPointsBtn, &QPushButton::clicked, this, &MainWindow::clearAllPoints);
+    connect(ui->colorFormatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+        updatePointsList();
+    });
     connect(ui->pointsList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
         this->onPointsListItemDoubleClicked(item);
     });
@@ -311,15 +385,16 @@ void MainWindow::updatePointsList()
 {
     ui->pointsList->clear();
 
+    ColorFormat format = getCurrentColorFormat();
+
     for (int i = 0; i < detectionPoints.size(); ++i) {
         const auto& point = detectionPoints[i];
-        QString text = QString("点 %1: (%2, %3) RGB(%4, %5, %6)")
+        QString colorText = formatColorToString(point.r, point.g, point.b, format);
+        QString text = QString("点 %1: (%2, %3) %4")
             .arg(i + 1)
             .arg(point.x)
             .arg(point.y)
-            .arg(point.r)
-            .arg(point.g)
-            .arg(point.b);
+            .arg(colorText);
         ui->pointsList->addItem(text);
     }
 }
@@ -350,8 +425,21 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
 
         // 显示当前RGB颜色（只读）
         QLabel* rgbLabel = new QLabel(QString("RGB(%1, %2, %3)").arg(point.r).arg(point.g).arg(point.b), &dialog);
-        rgbLabel->setStyleSheet("color: gray; padding: 5px; background-color: rgb(%1, %2, %3);");
+        rgbLabel->setStyleSheet(QString("color: gray; padding: 5px; background-color: rgb(%1, %2, %3);").arg(point.r).arg(point.g).arg(point.b));
         layout->addRow("当前颜色:", rgbLabel);
+
+        // 显示多种颜色格式
+        ColorFormat currentFormat = getCurrentColorFormat();
+        QString formatInfo = QString("当前显示格式: %1\n\n其他格式:\n%2\n%3\n%4\n%5")
+            .arg(ui->colorFormatCombo->currentText())
+            .arg(rgbToHex(point.r, point.g, point.b))
+            .arg(rgbToHsl(point.r, point.g, point.b))
+            .arg(rgbToHsv(point.r, point.g, point.b))
+            .arg(rgbToCmyk(point.r, point.g, point.b));
+
+        QLabel* allFormatsLabel = new QLabel(formatInfo, &dialog);
+        allFormatsLabel->setStyleSheet("color: #333; font-size: 11px; padding: 5px; background-color: #f5f5f5; border: 1px solid #ccc;");
+        layout->addRow(allFormatsLabel);
 
         // 提示信息
         QLabel* hintLabel = new QLabel("RGB颜色将自动从图片获取", &dialog);
@@ -461,6 +549,9 @@ bool MainWindow::saveJsonConfig(const QString& filePath)
     }
     root["point"] = pointsArray;
 
+    // Save color format preference
+    root["colorFormat"] = ui->colorFormatCombo->currentIndex();
+
     QJsonDocument doc(root);
     QFile file(filePath);
     if (file.open(QIODevice::WriteOnly)) {
@@ -515,6 +606,14 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
                 detectionPoints.append(DetectionPoint::fromJson(value.toArray()));
             }
         }
+    }
+
+    // Load color format preference (backward compatible - defaults to 0 if not present)
+    if (root.contains("colorFormat") && root["colorFormat"].isDouble()) {
+        int colorFormatIndex = root["colorFormat"].toInt();
+        ui->colorFormatCombo->setCurrentIndex(qBound(0, colorFormatIndex, 4));
+    } else {
+        ui->colorFormatCombo->setCurrentIndex(0);  // Default to RGB
     }
 
     // 如果已加载图片，根据图片更新检测点的RGB值

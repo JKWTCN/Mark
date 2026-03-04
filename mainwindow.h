@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QListWidgetItem>
+#include <QColor>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -43,6 +44,14 @@ struct DetectionPoint {
             arr[4].toInt()
         );
     }
+};
+
+enum class ColorFormat {
+    RGB,
+    HEX,
+    HSL,
+    HSV,
+    CMYK
 };
 
 class MainWindow : public QMainWindow
@@ -101,5 +110,16 @@ private:
     void updateImageDisplay();
     void setZoom(double zoom);
     void updatePointsRGBFromImage();
+
+    // Color format conversion functions
+    QString formatColorToString(int r, int g, int b, ColorFormat format);
+    QString rgbToHex(int r, int g, int b);
+    QString rgbToHsl(int r, int g, int b);
+    QString rgbToHsv(int r, int g, int b);
+    QString rgbToCmyk(int r, int g, int b);
+    ColorFormat getCurrentColorFormat() const;
+
+    // User preference
+    int lastUsedColorFormat = 0;  // 0 = RGB (default)
 };
 #endif // MAINWINDOW_H
