@@ -469,17 +469,38 @@ void MainWindow::updatePointsList()
     ui->pointsList->clear();
 
     ColorFormat format = getCurrentColorFormat();
+    const int iconSize = 16;  // 颜色色块大小
 
     for (int i = 0; i < detectionPoints.size(); ++i) {
         const auto& point = detectionPoints[i];
+
+        // 创建颜色图标
+        QPixmap colorIcon(iconSize, iconSize);
+        colorIcon.fill(QColor(point.r, point.g, point.b));
+
+        // 添加边框以提高可见性（特别是浅色）
+        QPainter painter(&colorIcon);
+        painter.setPen(QPen(Qt::gray, 1));
+        painter.drawRect(0, 0, iconSize - 1, iconSize - 1);
+
+        // 创建列表项文本
         QString colorText = formatColorToString(point.r, point.g, point.b, format);
         QString text = QString("点 %1: (%2, %3) %4")
             .arg(i + 1)
             .arg(point.x)
             .arg(point.y)
             .arg(colorText);
-        ui->pointsList->addItem(text);
+
+        // 创建列表项并设置图标
+        QListWidgetItem* item = new QListWidgetItem(text);
+        item->setIcon(QIcon(colorIcon));
+        item->setData(Qt::UserRole, i);  // 存储点索引便于后续使用
+
+        ui->pointsList->addItem(item);
     }
+
+    // 设置统一的图标大小
+    ui->pointsList->setIconSize(QSize(iconSize, iconSize));
 }
 
 void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
