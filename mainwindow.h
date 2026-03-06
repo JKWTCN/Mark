@@ -93,6 +93,10 @@ private:
     QList<DetectionPoint> detectionPoints;
     double currentZoom = 1.0;
 
+    // Image file information
+    QString currentImageFileName;
+    qint64 currentImageFileSize = 0;
+
     // Drag functionality
     bool isDragging = false;
     QPoint dragStartPos;
@@ -114,6 +118,8 @@ private:
     void updateImageDisplay();
     void setZoom(double zoom);
     void updatePointsRGBFromImage();
+    void updateImageInfoDisplay();
+    QString formatFileSize(qint64 bytes);
 
     // Color format conversion functions
     QString formatColorToString(int r, int g, int b, ColorFormat format);

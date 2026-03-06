@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QMouseEvent>
@@ -60,6 +61,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Add splitter to the main layout
     mainLayout->addWidget(splitter);
+    // Initialize image info display
+    updateImageInfoDisplay();
 }
 
 MainWindow::~MainWindow()
@@ -137,6 +140,52 @@ ColorFormat MainWindow::getCurrentColorFormat() const
     return static_cast<ColorFormat>(index);
 }
 
+QString MainWindow::formatFileSize(qint64 bytes)
+{
+    if (bytes < 1024) {
+        return QString("%1 B").arg(bytes);
+    } else if (bytes < 1024 * 1024) {
+        return QString("%1 KB").arg(bytes / 1024.0, 0, 'f', 2);
+    } else if (bytes < 1024 * 1024 * 1024) {
+        return QString("%1 MB").arg(bytes / (1024.0 * 1024.0), 0, 'f', 2);
+    } else {
+        return QString("%1 GB").arg(bytes / (1024.0 * 1024.0 * 1024.0), 0, 'f', 2);
+    }
+}
+
+void MainWindow::updateImageInfoDisplay()
+{
+    if (currentImage.isNull()) {
+        ui->imageWidthValue->setText("-");
+        ui->imageHeightValue->setText("-");
+        ui->imageSizeValue->setText("-");
+        ui->imageFileNameValue->setText("未加载图片");
+        ui->imageFileSizeValue->setText("-");
+    } else {
+        int width = currentImage.width();
+        int height = currentImage.height();
+
+        ui->imageWidthValue->setText(QString::number(width));
+        ui->imageHeightValue->setText(QString::number(height));
+        ui->imageSizeValue->setText(QString("%1 x %2").arg(width).arg(height));
+
+        if (!currentImageFileName.isEmpty()) {
+            QFileInfo fileInfo(currentImageFileName);
+            ui->imageFileNameValue->setText(fileInfo.fileName());
+            ui->imageFileNameValue->setToolTip(currentImageFileName);
+
+            if (currentImageFileSize > 0) {
+                ui->imageFileSizeValue->setText(formatFileSize(currentImageFileSize));
+            } else {
+                ui->imageFileSizeValue->setText("-");
+            }
+        } else {
+            ui->imageFileNameValue->setText("(拖放加载)");
+            ui->imageFileSizeValue->setText("-");
+        }
+    }
+}
+
 void MainWindow::setupConnections()
 {
     connect(ui->loadImageBtn, &QPushButton::clicked, this, &MainWindow::loadImage);
@@ -174,9 +223,15 @@ void MainWindow::loadImage()
 
         currentImage.load(fileName);
         if (!currentImage.isNull()) {
+            // 保存图片文件信息
+            currentImageFileName = fileName;
+            QFileInfo fileInfo(fileName);
+            currentImageFileSize = fileInfo.size();
+
             ui->imageLabel->setText("");
             // 保持当前缩放比例，不调用 fitToScreen()
             updateImageDisplay();
+            updateImageInfoDisplay();
 
             // 更新所有检测点的RGB值
             updatePointsRGBFromImage();
@@ -550,9 +605,15 @@ void MainWindow::dropEvent(QDropEvent *event)
 
                 currentImage.load(fileName);
                 if (!currentImage.isNull()) {
+                    // 保存图片文件信息
+                    currentImageFileName = fileName;
+                    QFileInfo fileInfo(fileName);
+                    currentImageFileSize = fileInfo.size();
+
                     ui->imageLabel->setText("");
                     // 保持当前缩放比例，不调用 fitToScreen()
                     updateImageDisplay();
+                    updateImageInfoDisplay();
 
                     // 更新所有检测点的RGB值
                     updatePointsRGBFromImage();
@@ -579,6 +640,19 @@ bool MainWindow::saveJsonConfig(const QString& filePath)
 
     // Save color format preference
     root["colorFormat"] = ui->colorFormatCombo->currentIndex();
+
+    // Save image dimensions
+    if (!currentImage.isNull()) {
+        root["imageWidth"] = currentImage.width();
+        root["imageHeight"] = currentImage.height();
+    }
+
+    // Save screen dimensions
+    root["screenWidth"] = ui->screenWidthSpin->value();
+    root["screenHeight"] = ui->screenHeightSpin->value();
+
+    // Save config name
+    root["configName"] = ui->configNameEdit->text();
 
     QJsonDocument doc(root);
     QFile file(filePath);
@@ -642,6 +716,38 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
         ui->colorFormatCombo->setCurrentIndex(qBound(0, colorFormatIndex, 4));
     } else {
         ui->colorFormatCombo->setCurrentIndex(0);  // Default to RGB
+    }
+
+    // Load config name (backward compatible - defaults to empty string if not present)
+    if (root.contains("configName") && root["configName"].isString()) {
+        ui->configNameEdit->setText(root["configName"].toString());
+    } else {
+        ui->configNameEdit->setText("");
+    }
+
+    // Load screen dimensions (backward compatible - defaults if not present)
+    if (root.contains("screenWidth") && root["screenWidth"].isDouble()) {
+        ui->screenWidthSpin->setValue(root["screenWidth"].toInt());
+    }
+    if (root.contains("screenHeight") && root["screenHeight"].isDouble()) {
+        ui->screenHeightSpin->setValue(root["screenHeight"].toInt());
+    }
+
+    // Load image dimensions (backward compatible - ignore if not present)
+    // If image dimensions are in config, display them even if no image is loaded
+    bool hasImageDimensions = root.contains("imageWidth") && root.contains("imageHeight") &&
+                             root["imageWidth"].isDouble() && root["imageHeight"].isDouble();
+
+    // 如果配置中有图片尺寸信息，更新显示
+    if (hasImageDimensions && currentImage.isNull()) {
+        int imageWidth = root["imageWidth"].toInt();
+        int imageHeight = root["imageHeight"].toInt();
+
+        ui->imageWidthValue->setText(QString::number(imageWidth));
+        ui->imageHeightValue->setText(QString::number(imageHeight));
+        ui->imageSizeValue->setText(QString("%1 x %2").arg(imageWidth).arg(imageHeight));
+        ui->imageFileNameValue->setText("(配置中的尺寸)");
+        ui->imageFileSizeValue->setText("-");
     }
 
     // 如果已加载图片，根据图片更新检测点的RGB值
