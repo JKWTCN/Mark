@@ -207,6 +207,7 @@ void MainWindow::setupConnections()
     connect(ui->addPointManuallyBtn, &QPushButton::clicked, this, &MainWindow::onAddPointManuallyClicked);
     connect(ui->deletePointBtn, &QPushButton::clicked, this, &MainWindow::onDeletePointClicked);
     connect(ui->editPointBtn, &QPushButton::clicked, this, &MainWindow::onEditPointClicked);
+    connect(ui->copyPointBtn, &QPushButton::clicked, this, &MainWindow::onCopyPointClicked);
 }
 
 void MainWindow::loadImage()
@@ -959,4 +960,104 @@ void MainWindow::updatePointsRGBFromImage()
 
     // 更新显示
     updatePointsList();
+}
+
+void MainWindow::onCopyPointClicked()
+{
+    // 获取当前选中项
+    QListWidgetItem* item = ui->pointsList->currentItem();
+    if (!item) {
+        QMessageBox::warning(this, "提示", "请先选择要复制的检测点");
+        return;
+    }
+
+    // 获取选中点的索引
+    int index = ui->pointsList->row(item);
+    if (index < 0 || index >= detectionPoints.size()) {
+        QMessageBox::warning(this, "错误", "检测点索引无效");
+        return;
+    }
+
+    // 获取检测点数据
+    const DetectionPoint& point = detectionPoints[index];
+
+    // 获取当前颜色格式
+    ColorFormat format = getCurrentColorFormat();
+
+    // 根据格式构建不同的复制字符串
+    QString copyText;
+    switch (format) {
+        case ColorFormat::RGB:
+            // RGB格式: [x,y,r,g,b]
+            copyText = QString("[%1,%2,%3,%4,%5]")
+                .arg(point.x)
+                .arg(point.y)
+                .arg(point.r)
+                .arg(point.g)
+                .arg(point.b);
+            break;
+        case ColorFormat::HEX:
+            // HEX格式: [x,y,#RRGGBB]
+            copyText = QString("[%1,%2,%3]")
+                .arg(point.x)
+                .arg(point.y)
+                .arg(rgbToHex(point.r, point.g, point.b));
+            break;
+        case ColorFormat::HSL: {
+            // HSL格式: [x,y,h,s,l]
+            QColor color(point.r, point.g, point.b);
+            int h, s, l;
+            color.getHsl(&h, &s, &l);
+            copyText = QString("[%1,%2,%3,%4,%5]")
+                .arg(point.x)
+                .arg(point.y)
+                .arg(h == 0 && point.r == 0 && point.g == 0 && point.b == 0 ? 0 : h)
+                .arg(qRound(s / 2.55))
+                .arg(qRound(l / 2.55));
+            break;
+        }
+        case ColorFormat::HSV: {
+            // HSV格式: [x,y,h,s,v]
+            QColor color(point.r, point.g, point.b);
+            int h, s, v;
+            color.getHsv(&h, &s, &v);
+            copyText = QString("[%1,%2,%3,%4,%5]")
+                .arg(point.x)
+                .arg(point.y)
+                .arg(h == 0 && point.r == 0 && point.g == 0 && point.b == 0 ? 0 : h)
+                .arg(qRound(s / 2.55))
+                .arg(qRound(v / 2.55));
+            break;
+        }
+        case ColorFormat::CMYK: {
+            // CMYK格式: [x,y,c,m,y,k]
+            QColor color(point.r, point.g, point.b);
+            int c, m, y, k;
+            color.getCmyk(&c, &m, &y, &k);
+            copyText = QString("[%1,%2,%3,%4,%5,%6]")
+                .arg(point.x)
+                .arg(point.y)
+                .arg(c)
+                .arg(m)
+                .arg(y)
+                .arg(k);
+            break;
+        }
+        default:
+            // 默认RGB格式
+            copyText = QString("[%1,%2,%3,%4,%5]")
+                .arg(point.x)
+                .arg(point.y)
+                .arg(point.r)
+                .arg(point.g)
+                .arg(point.b);
+            break;
+    }
+
+    // 复制到剪贴板
+    QClipboard* clipboard = QGuiApplication::clipboard();
+    clipboard->setText(copyText);
+
+    // 显示成功提示
+    QMessageBox::information(this, "成功", QString("已复制到剪贴板:\n%1").arg(copyText));
 }

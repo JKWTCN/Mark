@@ -277,6 +277,16 @@
               </property>
              </widget>
             </item>
+            <item>
+             <widget class="QPushButton" name="copyPointBtn">
+              <property name="text">
+               <string>复制选中点</string>
+              </property>
+              <property name="toolTip">
+               <string>复制格式根据当前颜色格式自动调整\nRGB: [x,y,r,g,b]\nHEX: [x,y,#RRGGBB]\nHSL: [x,y,h,s,l]\nHSV: [x,y,h,s,v]\nCMYK: [x,y,c,m,y,k]</string>
+              </property>
+             </widget>
+            </item>
            </layout>
           </item>
           <item>

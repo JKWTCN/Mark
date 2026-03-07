@@ -9,6 +9,8 @@
 #include <QListWidgetItem>
 #include <QColor>
 #include <QSplitter>
+#include <QClipboard>
+#include <QGuiApplication>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -86,6 +88,7 @@ private slots:
     void onAddPointManuallyClicked();
     void onDeletePointClicked();
     void onEditPointClicked();
+    void onCopyPointClicked();
 
 private:
     Ui::MainWindow *ui;
