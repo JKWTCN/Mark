@@ -57,6 +57,11 @@ enum class ColorFormat {
     CMYK
 };
 
+enum class CoordinateFormat {
+    Pixel,      // 像素坐标 (0 到 width-1, height-1)
+    Normalized  // 归一化坐标 (0.0 到 1.0)
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -134,5 +139,12 @@ private:
 
     // User preference
     int lastUsedColorFormat = 0;  // 0 = RGB (default)
+    int lastUsedCoordinateFormat = 0;  // 0 = Pixel (默认)
+
+    // Coordinate conversion functions
+    QString pixelToNormalizedString(int pixel, int maxValue);
+    int normalizedStringToPixel(const QString& normalizedStr, int maxValue);
+    QString formatCoordinates(int x, int y, CoordinateFormat format);
+    CoordinateFormat getCurrentCoordinateFormat() const;
 };
 #endif // MAINWINDOW_H

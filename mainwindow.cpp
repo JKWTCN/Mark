@@ -19,6 +19,7 @@
 #include <QFormLayout>
 #include <QDialogButtonBox>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QComboBox>
 
@@ -116,6 +117,42 @@ QString MainWindow::rgbToCmyk(int r, int g, int b)
         .arg(k);
 }
 
+QString MainWindow::pixelToNormalizedString(int pixel, int maxValue)
+{
+    if (maxValue <= 0) return "0.000";
+    double normalized = static_cast<double>(pixel) / maxValue;
+    return QString::number(normalized, 'f', 3);
+}
+
+int MainWindow::normalizedStringToPixel(const QString& normalizedStr, int maxValue)
+{
+    bool ok;
+    double normalized = normalizedStr.toDouble(&ok);
+    if (!ok || maxValue <= 0) return 0;
+    normalized = qBound(0.0, normalized, 1.0);
+    return qRound(normalized * maxValue);
+}
+
+QString MainWindow::formatCoordinates(int x, int y, CoordinateFormat format)
+{
+    if (format == CoordinateFormat::Normalized) {
+        if (currentImage.isNull()) {
+            return QString("(?, ?)");
+        }
+        QString normX = pixelToNormalizedString(x, currentImage.width() - 1);
+        QString normY = pixelToNormalizedString(y, currentImage.height() - 1);
+        return QString("(%1, %2)").arg(normX, normY);
+    } else {
+        return QString("(%1, %2)").arg(x).arg(y);
+    }
+}
+
+CoordinateFormat MainWindow::getCurrentCoordinateFormat() const
+{
+    int index = ui->coordinateFormatCombo->currentIndex();
+    return static_cast<CoordinateFormat>(index);
+}
+
 QString MainWindow::formatColorToString(int r, int g, int b, ColorFormat format)
 {
     switch (format) {
@@ -193,6 +230,9 @@ void MainWindow::setupConnections()
     connect(ui->saveConfigBtn, &QPushButton::clicked, this, &MainWindow::saveConfig);
     connect(ui->clearPointsBtn, &QPushButton::clicked, this, &MainWindow::clearAllPoints);
     connect(ui->colorFormatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+        updatePointsList();
+    });
+    connect(ui->coordinateFormatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
         updatePointsList();
     });
     connect(ui->pointsList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
@@ -469,7 +509,8 @@ void MainWindow::updatePointsList()
 {
     ui->pointsList->clear();
 
-    ColorFormat format = getCurrentColorFormat();
+    ColorFormat colorFormat = getCurrentColorFormat();
+    CoordinateFormat coordFormat = getCurrentCoordinateFormat();
     const int iconSize = 16;  // 颜色色块大小
 
     for (int i = 0; i < detectionPoints.size(); ++i) {
@@ -485,11 +526,11 @@ void MainWindow::updatePointsList()
         painter.drawRect(0, 0, iconSize - 1, iconSize - 1);
 
         // 创建列表项文本
-        QString colorText = formatColorToString(point.r, point.g, point.b, format);
-        QString text = QString("点 %1: (%2, %3) %4")
+        QString colorText = formatColorToString(point.r, point.g, point.b, colorFormat);
+        QString coordText = formatCoordinates(point.x, point.y, coordFormat);
+        QString text = QString("点 %1: %2 %3")
             .arg(i + 1)
-            .arg(point.x)
-            .arg(point.y)
+            .arg(coordText)
             .arg(colorText);
 
         // 创建列表项并设置图标
@@ -510,23 +551,52 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
     if (index >= 0 && index < detectionPoints.size()) {
         // 编辑检测点
         DetectionPoint& point = detectionPoints[index];
+        CoordinateFormat coordFormat = getCurrentCoordinateFormat();
 
         QDialog dialog(this);
         dialog.setWindowTitle("编辑检测点");
 
         QFormLayout* layout = new QFormLayout(&dialog);
 
-        // X坐标输入
-        QSpinBox* xSpinBox = new QSpinBox(&dialog);
-        xSpinBox->setRange(0, currentImage.isNull() ? 1920 : currentImage.width() - 1);
-        xSpinBox->setValue(point.x);
-        layout->addRow("X坐标:", xSpinBox);
+        QWidget* xInputWidget = nullptr;
+        QWidget* yInputWidget = nullptr;
 
-        // Y坐标输入
-        QSpinBox* ySpinBox = new QSpinBox(&dialog);
-        ySpinBox->setRange(0, currentImage.isNull() ? 1080 : currentImage.height() - 1);
-        ySpinBox->setValue(point.y);
-        layout->addRow("Y坐标:", ySpinBox);
+        if (coordFormat == CoordinateFormat::Normalized) {
+            if (currentImage.isNull()) {
+                QMessageBox::warning(this, "错误", "请先加载图片");
+                return;
+            }
+
+            QDoubleSpinBox* xSpinBox = new QDoubleSpinBox(&dialog);
+            xSpinBox->setRange(0.0, 1.0);
+            xSpinBox->setDecimals(3);
+            xSpinBox->setSingleStep(0.001);
+            double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
+            xSpinBox->setValue(normX);
+            layout->addRow("X坐标 (归一化):", xSpinBox);
+            xInputWidget = xSpinBox;
+
+            QDoubleSpinBox* ySpinBox = new QDoubleSpinBox(&dialog);
+            ySpinBox->setRange(0.0, 1.0);
+            ySpinBox->setDecimals(3);
+            ySpinBox->setSingleStep(0.001);
+            double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
+            ySpinBox->setValue(normY);
+            layout->addRow("Y坐标 (归一化):", ySpinBox);
+            yInputWidget = ySpinBox;
+        } else {
+            QSpinBox* xSpinBox = new QSpinBox(&dialog);
+            xSpinBox->setRange(0, currentImage.isNull() ? 1920 : currentImage.width() - 1);
+            xSpinBox->setValue(point.x);
+            layout->addRow("X坐标:", xSpinBox);
+            xInputWidget = xSpinBox;
+
+            QSpinBox* ySpinBox = new QSpinBox(&dialog);
+            ySpinBox->setRange(0, currentImage.isNull() ? 1080 : currentImage.height() - 1);
+            ySpinBox->setValue(point.y);
+            layout->addRow("Y坐标:", ySpinBox);
+            yInputWidget = ySpinBox;
+        }
 
         // 显示当前RGB颜色（只读）
         QLabel* rgbLabel = new QLabel(QString("RGB(%1, %2, %3)").arg(point.r).arg(point.g).arg(point.b), &dialog);
@@ -568,8 +638,24 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
         // 显示对话框
         if (dialog.exec() == QDialog::Accepted) {
             // 更新坐标
-            int newX = xSpinBox->value();
-            int newY = ySpinBox->value();
+            int newX, newY;
+
+            if (coordFormat == CoordinateFormat::Normalized) {
+                QDoubleSpinBox* xSpin = static_cast<QDoubleSpinBox*>(xInputWidget);
+                QDoubleSpinBox* ySpin = static_cast<QDoubleSpinBox*>(yInputWidget);
+
+                double normX = xSpin->value();
+                double normY = ySpin->value();
+
+                newX = qRound(normX * (currentImage.width() - 1));
+                newY = qRound(normY * (currentImage.height() - 1));
+            } else {
+                QSpinBox* xSpin = static_cast<QSpinBox*>(xInputWidget);
+                QSpinBox* ySpin = static_cast<QSpinBox*>(yInputWidget);
+
+                newX = xSpin->value();
+                newY = ySpin->value();
+            }
 
             // 从图片获取新坐标的RGB颜色
             QColor newColor = getPixelColor(QPoint(newX, newY));
@@ -663,6 +749,9 @@ bool MainWindow::saveJsonConfig(const QString& filePath)
     // Save color format preference
     root["colorFormat"] = ui->colorFormatCombo->currentIndex();
 
+    // Save coordinate format preference
+    root["coordinateFormat"] = ui->coordinateFormatCombo->currentIndex();
+
     // Save image dimensions
     if (!currentImage.isNull()) {
         root["imageWidth"] = currentImage.width();
@@ -738,6 +827,14 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
         ui->colorFormatCombo->setCurrentIndex(qBound(0, colorFormatIndex, 4));
     } else {
         ui->colorFormatCombo->setCurrentIndex(0);  // Default to RGB
+    }
+
+    // Load coordinate format preference (向后兼容)
+    if (root.contains("coordinateFormat") && root["coordinateFormat"].isDouble()) {
+        int coordFormatIndex = root["coordinateFormat"].toInt();
+        ui->coordinateFormatCombo->setCurrentIndex(qBound(0, coordFormatIndex, 1));
+    } else {
+        ui->coordinateFormatCombo->setCurrentIndex(0);  // Default to Pixel
     }
 
     // Load config name (backward compatible - defaults to empty string if not present)
@@ -847,25 +944,46 @@ void MainWindow::onAddPointManuallyClicked()
         return;
     }
 
+    CoordinateFormat coordFormat = getCurrentCoordinateFormat();
+
     // 创建对话框
     QDialog dialog(this);
     dialog.setWindowTitle("手动添加检测点");
 
     QFormLayout* layout = new QFormLayout(&dialog);
 
-    // X坐标输入
-    QSpinBox* xSpinBox = new QSpinBox(&dialog);
-    xSpinBox->setRange(0, currentImage.width() - 1);
-    xSpinBox->setValue(currentImage.width() / 2);
-    xSpinBox->setPrefix("X: ");
-    layout->addRow("X坐标:", xSpinBox);
+    QWidget* xInputWidget = nullptr;
+    QWidget* yInputWidget = nullptr;
 
-    // Y坐标输入
-    QSpinBox* ySpinBox = new QSpinBox(&dialog);
-    ySpinBox->setRange(0, currentImage.height() - 1);
-    ySpinBox->setValue(currentImage.height() / 2);
-    ySpinBox->setPrefix("Y: ");
-    layout->addRow("Y坐标:", ySpinBox);
+    if (coordFormat == CoordinateFormat::Normalized) {
+        QDoubleSpinBox* xSpinBox = new QDoubleSpinBox(&dialog);
+        xSpinBox->setRange(0.0, 1.0);
+        xSpinBox->setDecimals(3);
+        xSpinBox->setSingleStep(0.001);
+        xSpinBox->setValue(0.5);
+        layout->addRow("X坐标 (归一化):", xSpinBox);
+        xInputWidget = xSpinBox;
+
+        QDoubleSpinBox* ySpinBox = new QDoubleSpinBox(&dialog);
+        ySpinBox->setRange(0.0, 1.0);
+        ySpinBox->setDecimals(3);
+        ySpinBox->setSingleStep(0.001);
+        ySpinBox->setValue(0.5);
+        layout->addRow("Y坐标 (归一化):", ySpinBox);
+        yInputWidget = ySpinBox;
+    } else {
+        QSpinBox* xSpinBox = new QSpinBox(&dialog);
+        xSpinBox->setRange(0, currentImage.width() - 1);
+        xSpinBox->setValue(currentImage.width() / 2);
+        layout->addRow("X坐标:", xSpinBox);
+        xInputWidget = xSpinBox;
+
+        QSpinBox* ySpinBox = new QSpinBox(&dialog);
+        ySpinBox->setRange(0, currentImage.height() - 1);
+        ySpinBox->setValue(currentImage.height() / 2);
+        layout->addRow("Y坐标:", ySpinBox);
+        yInputWidget = ySpinBox;
+    }
 
     // 添加图片尺寸提示
     QLabel* sizeHint = new QLabel(QString("图片尺寸: %1 x %2").arg(currentImage.width()).arg(currentImage.height()), &dialog);
@@ -881,8 +999,24 @@ void MainWindow::onAddPointManuallyClicked()
 
     // 显示对话框
     if (dialog.exec() == QDialog::Accepted) {
-        int x = xSpinBox->value();
-        int y = ySpinBox->value();
+        int x, y;
+
+        if (coordFormat == CoordinateFormat::Normalized) {
+            QDoubleSpinBox* xSpin = static_cast<QDoubleSpinBox*>(xInputWidget);
+            QDoubleSpinBox* ySpin = static_cast<QDoubleSpinBox*>(yInputWidget);
+
+            double normX = xSpin->value();
+            double normY = ySpin->value();
+
+            x = qRound(normX * (currentImage.width() - 1));
+            y = qRound(normY * (currentImage.height() - 1));
+        } else {
+            QSpinBox* xSpin = static_cast<QSpinBox*>(xInputWidget);
+            QSpinBox* ySpin = static_cast<QSpinBox*>(yInputWidget);
+
+            x = xSpin->value();
+            y = ySpin->value();
+        }
 
         // 验证坐标
         if (x < 0 || x >= currentImage.width() || y < 0 || y >= currentImage.height()) {
@@ -981,26 +1115,39 @@ void MainWindow::onCopyPointClicked()
     // 获取检测点数据
     const DetectionPoint& point = detectionPoints[index];
 
-    // 获取当前颜色格式
+    // 获取当前颜色格式和坐标格式
     ColorFormat format = getCurrentColorFormat();
+    CoordinateFormat coordFormat = getCurrentCoordinateFormat();
+
+    // 准备坐标部分
+    QString coordPart;
+    if (coordFormat == CoordinateFormat::Normalized) {
+        if (currentImage.isNull()) {
+            QMessageBox::warning(this, "错误", "请先加载图片");
+            return;
+        }
+        double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
+        double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
+        coordPart = QString("%1,%2").arg(normX, 0, 'f', 3).arg(normY, 0, 'f', 3);
+    } else {
+        coordPart = QString("%1,%2").arg(point.x).arg(point.y);
+    }
 
     // 根据格式构建不同的复制字符串
     QString copyText;
     switch (format) {
         case ColorFormat::RGB:
             // RGB格式: [x,y,r,g,b]
-            copyText = QString("[%1,%2,%3,%4,%5]")
-                .arg(point.x)
-                .arg(point.y)
+            copyText = QString("[%1,%2,%3,%4]")
+                .arg(coordPart)
                 .arg(point.r)
                 .arg(point.g)
                 .arg(point.b);
             break;
         case ColorFormat::HEX:
             // HEX格式: [x,y,#RRGGBB]
-            copyText = QString("[%1,%2,%3]")
-                .arg(point.x)
-                .arg(point.y)
+            copyText = QString("[%1,%2]")
+                .arg(coordPart)
                 .arg(rgbToHex(point.r, point.g, point.b));
             break;
         case ColorFormat::HSL: {
@@ -1008,9 +1155,8 @@ void MainWindow::onCopyPointClicked()
             QColor color(point.r, point.g, point.b);
             int h, s, l;
             color.getHsl(&h, &s, &l);
-            copyText = QString("[%1,%2,%3,%4,%5]")
-                .arg(point.x)
-                .arg(point.y)
+            copyText = QString("[%1,%2,%3,%4]")
+                .arg(coordPart)
                 .arg(h == 0 && point.r == 0 && point.g == 0 && point.b == 0 ? 0 : h)
                 .arg(qRound(s / 2.55))
                 .arg(qRound(l / 2.55));
@@ -1021,9 +1167,8 @@ void MainWindow::onCopyPointClicked()
             QColor color(point.r, point.g, point.b);
             int h, s, v;
             color.getHsv(&h, &s, &v);
-            copyText = QString("[%1,%2,%3,%4,%5]")
-                .arg(point.x)
-                .arg(point.y)
+            copyText = QString("[%1,%2,%3,%4]")
+                .arg(coordPart)
                 .arg(h == 0 && point.r == 0 && point.g == 0 && point.b == 0 ? 0 : h)
                 .arg(qRound(s / 2.55))
                 .arg(qRound(v / 2.55));
@@ -1034,9 +1179,8 @@ void MainWindow::onCopyPointClicked()
             QColor color(point.r, point.g, point.b);
             int c, m, y, k;
             color.getCmyk(&c, &m, &y, &k);
-            copyText = QString("[%1,%2,%3,%4,%5,%6]")
-                .arg(point.x)
-                .arg(point.y)
+            copyText = QString("[%1,%2,%3,%4,%5]")
+                .arg(coordPart)
                 .arg(c)
                 .arg(m)
                 .arg(y)
@@ -1045,9 +1189,8 @@ void MainWindow::onCopyPointClicked()
         }
         default:
             // 默认RGB格式
-            copyText = QString("[%1,%2,%3,%4,%5]")
-                .arg(point.x)
-                .arg(point.y)
+            copyText = QString("[%1,%2,%3,%4]")
+                .arg(coordPart)
                 .arg(point.r)
                 .arg(point.g)
                 .arg(point.b);

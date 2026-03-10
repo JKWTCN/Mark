@@ -247,6 +247,27 @@
         </widget>
        </item>
        <item>
+        <widget class="QLabel" name="coordinateFormatLabel">
+         <property name="text">
+          <string>坐标格式:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="coordinateFormatCombo">
+         <item>
+          <property name="text">
+           <string>像素坐标</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>归一化坐标 (0-1)</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item>
         <widget class="QGroupBox" name="pointsGroup">
          <property name="title">
           <string>检测点列表</string>
