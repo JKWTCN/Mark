@@ -88,6 +88,93 @@
         </widget>
        </item>
        <item>
+        <widget class="QGroupBox" name="displaySettingsGroup">
+         <property name="title">
+          <string>显示设置</string>
+         </property>
+         <layout class="QFormLayout" name="displaySettingsLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_normalized_decimals">
+            <property name="text">
+             <string>归一化坐标小数位:</string>
+            </property>
+            <property name="toolTip">
+             <string>设置归一化坐标显示的小数位数 (0-8位)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QSpinBox" name="normalizedDecimalsSpin">
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>8</number>
+            </property>
+            <property name="value">
+             <number>6</number>
+            </property>
+            <property name="toolTip">
+             <string>归一化坐标显示的小数位数</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="label_color_decimals">
+            <property name="text">
+             <string>HSL/HSV百分比小数位:</string>
+            </property>
+            <property name="toolTip">
+             <string>设置HSL/HSV颜色格式中百分比显示的小数位数 (0-2位)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="colorDecimalsSpin">
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>2</number>
+            </property>
+            <property name="value">
+             <number>0</number>
+            </property>
+            <property name="toolTip">
+             <string>HSL/HSV颜色格式中百分比显示的小数位数</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_filesize_decimals">
+            <property name="text">
+             <string>文件大小小数位:</string>
+            </property>
+            <property name="toolTip">
+             <string>设置文件大小显示的小数位数 (0-3位)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QSpinBox" name="fileSizeDecimalsSpin">
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>3</number>
+            </property>
+            <property name="value">
+             <number>2</number>
+            </property>
+            <property name="toolTip">
+             <string>文件大小显示的小数位数</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QGroupBox" name="imageInfoGroup">
          <property name="title">
           <string>图片信息</string>

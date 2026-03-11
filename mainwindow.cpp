@@ -22,6 +22,7 @@
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <QComboBox>
+#include <QtMath>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -47,6 +48,25 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Initialize image info display
     updateImageInfoDisplay();
+
+    // Initialize display settings
+    ui->normalizedDecimalsSpin->setValue(normalizedDecimals);
+    ui->colorDecimalsSpin->setValue(colorDecimals);
+    ui->fileSizeDecimalsSpin->setValue(fileSizeDecimals);
+
+    // Connect display settings signals
+    connect(ui->normalizedDecimalsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
+        normalizedDecimals = value;
+        updatePointsList();
+    });
+    connect(ui->colorDecimalsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
+        colorDecimals = value;
+        updatePointsList();
+    });
+    connect(ui->fileSizeDecimalsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
+        fileSizeDecimals = value;
+        updateImageInfoDisplay();
+    });
 }
 
 MainWindow::~MainWindow()
@@ -69,10 +89,20 @@ QString MainWindow::rgbToHsl(int r, int g, int b)
     int h, s, l;
     color.getHsl(&h, &s, &l);
 
-    return QString("HSL(%1°, %2%, %3%)")
-        .arg(h < 0 ? 0 : h)
-        .arg(qRound(s / 2.55))
-        .arg(qRound(l / 2.55));
+    double sPercent = s / 2.55;
+    double lPercent = l / 2.55;
+
+    if (colorDecimals == 0) {
+        return QString("HSL(%1°, %2%, %3%)")
+            .arg(h < 0 ? 0 : h)
+            .arg(qRound(sPercent))
+            .arg(qRound(lPercent));
+    } else {
+        return QString("HSL(%1°, %2%, %3%)")
+            .arg(h < 0 ? 0 : h)
+            .arg(sPercent, 0, 'f', colorDecimals)
+            .arg(lPercent, 0, 'f', colorDecimals);
+    }
 }
 
 QString MainWindow::rgbToHsv(int r, int g, int b)
@@ -81,10 +111,20 @@ QString MainWindow::rgbToHsv(int r, int g, int b)
     int h, s, v;
     color.getHsv(&h, &s, &v);
 
-    return QString("HSV(%1°, %2%, %3%)")
-        .arg(h < 0 ? 0 : h)
-        .arg(qRound(s / 2.55))
-        .arg(qRound(v / 2.55));
+    double sPercent = s / 2.55;
+    double vPercent = v / 2.55;
+
+    if (colorDecimals == 0) {
+        return QString("HSV(%1°, %2%, %3%)")
+            .arg(h < 0 ? 0 : h)
+            .arg(qRound(sPercent))
+            .arg(qRound(vPercent));
+    } else {
+        return QString("HSV(%1°, %2%, %3%)")
+            .arg(h < 0 ? 0 : h)
+            .arg(sPercent, 0, 'f', colorDecimals)
+            .arg(vPercent, 0, 'f', colorDecimals);
+    }
 }
 
 QString MainWindow::rgbToCmyk(int r, int g, int b)
@@ -104,7 +144,7 @@ QString MainWindow::pixelToNormalizedString(int pixel, int maxValue)
 {
     if (maxValue <= 0) return "0.000000";
     double normalized = static_cast<double>(pixel) / maxValue;
-    return QString::number(normalized, 'f', 6);
+    return QString::number(normalized, 'f', normalizedDecimals);
 }
 
 int MainWindow::normalizedStringToPixel(const QString& normalizedStr, int maxValue)
@@ -165,11 +205,11 @@ QString MainWindow::formatFileSize(qint64 bytes)
     if (bytes < 1024) {
         return QString("%1 B").arg(bytes);
     } else if (bytes < 1024 * 1024) {
-        return QString("%1 KB").arg(bytes / 1024.0, 0, 'f', 2);
+        return QString("%1 KB").arg(bytes / 1024.0, 0, 'f', fileSizeDecimals);
     } else if (bytes < 1024 * 1024 * 1024) {
-        return QString("%1 MB").arg(bytes / (1024.0 * 1024.0), 0, 'f', 2);
+        return QString("%1 MB").arg(bytes / (1024.0 * 1024.0), 0, 'f', fileSizeDecimals);
     } else {
-        return QString("%1 GB").arg(bytes / (1024.0 * 1024.0 * 1024.0), 0, 'f', 2);
+        return QString("%1 GB").arg(bytes / (1024.0 * 1024.0 * 1024.0), 0, 'f', fileSizeDecimals);
     }
 }
 
@@ -551,8 +591,8 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
 
             QDoubleSpinBox* xSpinBox = new QDoubleSpinBox(&dialog);
             xSpinBox->setRange(0.0, 1.0);
-            xSpinBox->setDecimals(6);
-            xSpinBox->setSingleStep(0.000001);
+            xSpinBox->setDecimals(normalizedDecimals);
+            xSpinBox->setSingleStep(qPow(10, -normalizedDecimals));
             double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
             xSpinBox->setValue(normX);
             layout->addRow("X坐标 (归一化):", xSpinBox);
@@ -560,8 +600,8 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
 
             QDoubleSpinBox* ySpinBox = new QDoubleSpinBox(&dialog);
             ySpinBox->setRange(0.0, 1.0);
-            ySpinBox->setDecimals(6);
-            ySpinBox->setSingleStep(0.000001);
+            ySpinBox->setDecimals(normalizedDecimals);
+            ySpinBox->setSingleStep(qPow(10, -normalizedDecimals));
             double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
             ySpinBox->setValue(normY);
             layout->addRow("Y坐标 (归一化):", ySpinBox);
@@ -747,6 +787,11 @@ bool MainWindow::saveJsonConfig(const QString& filePath)
     // Save config name
     root["configName"] = ui->configNameEdit->text();
 
+    // Save display settings - decimal places
+    root["normalizedDecimals"] = normalizedDecimals;
+    root["colorDecimals"] = colorDecimals;
+    root["fileSizeDecimals"] = fileSizeDecimals;
+
     QJsonDocument doc(root);
     QFile file(filePath);
     if (file.open(QIODevice::WriteOnly)) {
@@ -832,6 +877,20 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
     }
     if (root.contains("screenHeight") && root["screenHeight"].isDouble()) {
         ui->screenHeightSpin->setValue(root["screenHeight"].toInt());
+    }
+
+    // Load display settings - decimal places (backward compatible - defaults if not present)
+    if (root.contains("normalizedDecimals") && root["normalizedDecimals"].isDouble()) {
+        normalizedDecimals = qBound(0, root["normalizedDecimals"].toInt(), 8);
+        ui->normalizedDecimalsSpin->setValue(normalizedDecimals);
+    }
+    if (root.contains("colorDecimals") && root["colorDecimals"].isDouble()) {
+        colorDecimals = qBound(0, root["colorDecimals"].toInt(), 2);
+        ui->colorDecimalsSpin->setValue(colorDecimals);
+    }
+    if (root.contains("fileSizeDecimals") && root["fileSizeDecimals"].isDouble()) {
+        fileSizeDecimals = qBound(0, root["fileSizeDecimals"].toInt(), 3);
+        ui->fileSizeDecimalsSpin->setValue(fileSizeDecimals);
     }
 
     // Load image dimensions (backward compatible - ignore if not present)
@@ -940,16 +999,16 @@ void MainWindow::onAddPointManuallyClicked()
     if (coordFormat == CoordinateFormat::Normalized) {
         QDoubleSpinBox* xSpinBox = new QDoubleSpinBox(&dialog);
         xSpinBox->setRange(0.0, 1.0);
-        xSpinBox->setDecimals(6);
-        xSpinBox->setSingleStep(0.000001);
+        xSpinBox->setDecimals(normalizedDecimals);
+        xSpinBox->setSingleStep(qPow(10, -normalizedDecimals));
         xSpinBox->setValue(0.5);
         layout->addRow("X坐标 (归一化):", xSpinBox);
         xInputWidget = xSpinBox;
 
         QDoubleSpinBox* ySpinBox = new QDoubleSpinBox(&dialog);
         ySpinBox->setRange(0.0, 1.0);
-        ySpinBox->setDecimals(6);
-        ySpinBox->setSingleStep(0.000001);
+        ySpinBox->setDecimals(normalizedDecimals);
+        ySpinBox->setSingleStep(qPow(10, -normalizedDecimals));
         ySpinBox->setValue(0.5);
         layout->addRow("Y坐标 (归一化):", ySpinBox);
         yInputWidget = ySpinBox;
@@ -1110,7 +1169,7 @@ void MainWindow::onCopyPointClicked()
         }
         double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
         double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
-        coordPart = QString("%1,%2").arg(normX, 0, 'f', 6).arg(normY, 0, 'f', 6);
+        coordPart = QString("%1,%2").arg(normX, 0, 'f', normalizedDecimals).arg(normY, 0, 'f', normalizedDecimals);
     } else {
         coordPart = QString("%1,%2").arg(point.x).arg(point.y);
     }
@@ -1137,11 +1196,21 @@ void MainWindow::onCopyPointClicked()
             QColor color(point.r, point.g, point.b);
             int h, s, l;
             color.getHsl(&h, &s, &l);
-            copyText = QString("[%1,%2,%3,%4]")
-                .arg(coordPart)
-                .arg(h < 0 ? 0 : h)
-                .arg(qRound(s / 2.55))
-                .arg(qRound(l / 2.55));
+            double sPercent = s / 2.55;
+            double lPercent = l / 2.55;
+            if (colorDecimals == 0) {
+                copyText = QString("[%1,%2,%3,%4]")
+                    .arg(coordPart)
+                    .arg(h < 0 ? 0 : h)
+                    .arg(qRound(sPercent))
+                    .arg(qRound(lPercent));
+            } else {
+                copyText = QString("[%1,%2,%3,%4]")
+                    .arg(coordPart)
+                    .arg(h < 0 ? 0 : h)
+                    .arg(sPercent, 0, 'f', colorDecimals)
+                    .arg(lPercent, 0, 'f', colorDecimals);
+            }
             break;
         }
         case ColorFormat::HSV: {
@@ -1149,11 +1218,21 @@ void MainWindow::onCopyPointClicked()
             QColor color(point.r, point.g, point.b);
             int h, s, v;
             color.getHsv(&h, &s, &v);
-            copyText = QString("[%1,%2,%3,%4]")
-                .arg(coordPart)
-                .arg(h < 0 ? 0 : h)
-                .arg(qRound(s / 2.55))
-                .arg(qRound(v / 2.55));
+            double sPercent = s / 2.55;
+            double vPercent = v / 2.55;
+            if (colorDecimals == 0) {
+                copyText = QString("[%1,%2,%3,%4]")
+                    .arg(coordPart)
+                    .arg(h < 0 ? 0 : h)
+                    .arg(qRound(sPercent))
+                    .arg(qRound(vPercent));
+            } else {
+                copyText = QString("[%1,%2,%3,%4]")
+                    .arg(coordPart)
+                    .arg(h < 0 ? 0 : h)
+                    .arg(sPercent, 0, 'f', colorDecimals)
+                    .arg(vPercent, 0, 'f', colorDecimals);
+            }
             break;
         }
         case ColorFormat::CMYK: {

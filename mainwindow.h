@@ -138,6 +138,11 @@ private:
     int lastUsedColorFormat = 0;  // 0 = RGB (default)
     int lastUsedCoordinateFormat = 0;  // 0 = Pixel (默认)
 
+    // Display settings - decimal places
+    int normalizedDecimals = 6;
+    int colorDecimals = 0;
+    int fileSizeDecimals = 2;
+
     // Coordinate conversion functions
     QString pixelToNormalizedString(int pixel, int maxValue);
     int normalizedStringToPixel(const QString& normalizedStr, int maxValue);
