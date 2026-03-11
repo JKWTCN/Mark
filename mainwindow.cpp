@@ -23,6 +23,8 @@
 #include <QLabel>
 #include <QComboBox>
 #include <QtMath>
+#include <QDir>
+#include <algorithm>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -271,6 +273,9 @@ void MainWindow::setupConnections()
     connect(ui->deletePointBtn, &QPushButton::clicked, this, &MainWindow::onDeletePointClicked);
     connect(ui->editPointBtn, &QPushButton::clicked, this, &MainWindow::onEditPointClicked);
     connect(ui->copyPointBtn, &QPushButton::clicked, this, &MainWindow::onCopyPointClicked);
+    connect(ui->loadFolderBtn, &QPushButton::clicked, this, &MainWindow::loadFolder);
+    connect(ui->prevImageBtn, &QPushButton::clicked, this, &MainWindow::previousImage);
+    connect(ui->nextImageBtn, &QPushButton::clicked, this, &MainWindow::nextImage);
 }
 
 void MainWindow::loadImage()
@@ -279,6 +284,14 @@ void MainWindow::loadImage()
         "Images (*.png *.jpg *.jpeg *.bmp *.webp)");
 
     if (!fileName.isEmpty()) {
+        // 清空文件夹模式，切换回单张图片模式
+        if (!imageFileList.isEmpty()) {
+            imageFileList.clear();
+            currentImageIndex = -1;
+            updateNavigationButtons();
+            updateImageCounterDisplay();
+        }
+
         // 保存当前的滚动条位置
         QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
         QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
@@ -1264,4 +1277,127 @@ void MainWindow::onCopyPointClicked()
 
     // 显示成功提示
     QMessageBox::information(this, "成功", QString("已复制到剪贴板:\n%1").arg(copyText));
+}
+
+void MainWindow::loadFolder()
+{
+    QString folderPath = QFileDialog::getExistingDirectory(
+        this,
+        "选择包含图片的文件夹",
+        currentFolderPath.isEmpty() ? "" : currentFolderPath
+    );
+
+    if (folderPath.isEmpty()) {
+        return;  // 用户取消选择
+    }
+
+    // 扫描文件夹中的所有图片文件
+    imageFileList.clear();
+    QDir folder(folderPath);
+    QStringList filters;
+    filters << "*.png" << "*.jpg" << "*.jpeg" << "*.bmp" << "*.webp";
+    folder.setNameFilters(filters);
+
+    QFileInfoList fileList = folder.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+
+    // 按文件名排序
+    std::sort(fileList.begin(), fileList.end(), [](const QFileInfo& a, const QFileInfo& b) {
+        return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0;
+    });
+
+    for (const QFileInfo& fileInfo : fileList) {
+        imageFileList.append(fileInfo.absoluteFilePath());
+    }
+
+    if (imageFileList.isEmpty()) {
+        QMessageBox::warning(this, "警告", "所选文件夹中没有支持的图片文件");
+        return;
+    }
+
+    // 保存文件夹路径
+    currentFolderPath = folderPath;
+
+    // 加载第一张图片
+    currentImageIndex = 0;
+    loadImageAtIndex(currentImageIndex);
+}
+
+void MainWindow::previousImage()
+{
+    if (imageFileList.isEmpty()) {
+        return;
+    }
+
+    // 循环浏览：第一张的前一张是最后一张
+    currentImageIndex = (currentImageIndex - 1 + imageFileList.size()) % imageFileList.size();
+    loadImageAtIndex(currentImageIndex);
+}
+
+void MainWindow::nextImage()
+{
+    if (imageFileList.isEmpty()) {
+        return;
+    }
+
+    // 循环浏览：最后一张的下一张是第一张
+    currentImageIndex = (currentImageIndex + 1) % imageFileList.size();
+    loadImageAtIndex(currentImageIndex);
+}
+
+void MainWindow::loadImageAtIndex(int index)
+{
+    if (index < 0 || index >= imageFileList.size()) {
+        return;
+    }
+
+    QString fileName = imageFileList[index];
+
+    // 保存当前的滚动条位置和缩放比例
+    QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
+    QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
+    int oldHScroll = hBar->value();
+    int oldVScroll = vBar->value();
+
+    // 加载新图片
+    currentImage.load(fileName);
+    if (!currentImage.isNull()) {
+        // 更新当前索引和文件信息
+        currentImageIndex = index;
+        currentImageFileName = fileName;
+        QFileInfo fileInfo(fileName);
+        currentImageFileSize = fileInfo.size();
+
+        ui->imageLabel->setText("");
+        updateImageDisplay();
+        updateImageInfoDisplay();
+        updatePointsRGBFromImage();
+        updateImageCounterDisplay();
+
+        // 恢复滚动条位置
+        hBar->setValue(qMin(oldHScroll, hBar->maximum()));
+        vBar->setValue(qMin(oldVScroll, vBar->maximum()));
+
+        // 更新按钮状态
+        updateNavigationButtons();
+    } else {
+        QMessageBox::warning(this, "错误", QString("无法加载图片: %1").arg(fileName));
+    }
+}
+
+void MainWindow::updateNavigationButtons()
+{
+    bool hasImages = !imageFileList.isEmpty();
+    ui->prevImageBtn->setEnabled(hasImages);
+    ui->nextImageBtn->setEnabled(hasImages);
+}
+
+void MainWindow::updateImageCounterDisplay()
+{
+    if (imageFileList.isEmpty() || currentImageIndex < 0) {
+        ui->imageCounterLabel->setText("-/-");
+    } else {
+        ui->imageCounterLabel->setText(
+            QString("%1/%2").arg(currentImageIndex + 1).arg(imageFileList.size())
+        );
+    }
 }

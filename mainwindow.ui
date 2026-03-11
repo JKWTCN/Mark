@@ -33,21 +33,21 @@
          <property name="title">
           <string>配置信息</string>
          </property>
-         <layout class="QFormLayout" name="formLayout">
-          <item row="0" column="0">
+         <layout class="QGridLayout" name="configGridLayout">
+          <item row="0" column="0" colspan="2">
            <widget class="QLabel" name="label">
             <property name="text">
              <string>配置名称:</string>
             </property>
            </widget>
           </item>
-          <item row="0" column="1">
+          <item row="0" column="2" colspan="2">
            <widget class="QLineEdit" name="configNameEdit"/>
           </item>
           <item row="1" column="0">
            <widget class="QLabel" name="label_2">
             <property name="text">
-             <string>屏幕宽度:</string>
+             <string>宽度:</string>
             </property>
            </widget>
           </item>
@@ -64,14 +64,14 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="0">
+          <item row="1" column="2">
            <widget class="QLabel" name="label_3">
             <property name="text">
-             <string>屏幕高度:</string>
+             <string>高度:</string>
             </property>
            </widget>
           </item>
-          <item row="2" column="1">
+          <item row="1" column="3">
            <widget class="QSpinBox" name="screenHeightSpin">
             <property name="minimum">
              <number>600</number>
@@ -92,11 +92,11 @@
          <property name="title">
           <string>显示设置</string>
          </property>
-         <layout class="QFormLayout" name="displaySettingsLayout">
+         <layout class="QGridLayout" name="displaySettingsGridLayout">
           <item row="0" column="0">
            <widget class="QLabel" name="label_normalized_decimals">
             <property name="text">
-             <string>归一化坐标小数位:</string>
+             <string>归一化:</string>
             </property>
             <property name="toolTip">
              <string>设置归一化坐标显示的小数位数 (0-8位)</string>
@@ -119,17 +119,17 @@
             </property>
            </widget>
           </item>
-          <item row="1" column="0">
+          <item row="0" column="2">
            <widget class="QLabel" name="label_color_decimals">
             <property name="text">
-             <string>HSL/HSV百分比小数位:</string>
+             <string>HSL/HSV:</string>
             </property>
             <property name="toolTip">
              <string>设置HSL/HSV颜色格式中百分比显示的小数位数 (0-2位)</string>
             </property>
            </widget>
           </item>
-          <item row="1" column="1">
+          <item row="0" column="3">
            <widget class="QSpinBox" name="colorDecimalsSpin">
             <property name="minimum">
              <number>0</number>
@@ -145,17 +145,17 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="0">
+          <item row="1" column="0">
            <widget class="QLabel" name="label_filesize_decimals">
             <property name="text">
-             <string>文件大小小数位:</string>
+             <string>文件大小:</string>
             </property>
             <property name="toolTip">
              <string>设置文件大小显示的小数位数 (0-3位)</string>
             </property>
            </widget>
           </item>
-          <item row="2" column="1">
+          <item row="1" column="1" colspan="3">
            <widget class="QSpinBox" name="fileSizeDecimalsSpin">
             <property name="minimum">
              <number>0</number>
@@ -179,7 +179,7 @@
          <property name="title">
           <string>图片信息</string>
          </property>
-         <layout class="QFormLayout" name="imageInfoLayout">
+         <layout class="QGridLayout" name="imageInfoGridLayout">
           <item row="0" column="0">
            <widget class="QLabel" name="label_img_width">
             <property name="text">
@@ -197,14 +197,14 @@
             </property>
            </widget>
           </item>
-          <item row="1" column="0">
+          <item row="0" column="2">
            <widget class="QLabel" name="label_img_height">
             <property name="text">
              <string>高度:</string>
             </property>
            </widget>
           </item>
-          <item row="1" column="1">
+          <item row="0" column="3">
            <widget class="QLabel" name="imageHeightValue">
             <property name="text">
              <string>-</string>
@@ -214,14 +214,14 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="0">
+          <item row="1" column="0">
            <widget class="QLabel" name="label_img_size">
             <property name="text">
              <string>尺寸:</string>
             </property>
            </widget>
           </item>
-          <item row="2" column="1">
+          <item row="1" column="1">
            <widget class="QLabel" name="imageSizeValue">
             <property name="text">
              <string>-</string>
@@ -231,37 +231,37 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="0">
-           <widget class="QLabel" name="label_img_filename">
+          <item row="1" column="2">
+           <widget class="QLabel" name="label_img_filesize">
             <property name="text">
-             <string>文件名:</string>
+             <string>大小:</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="1">
-           <widget class="QLabel" name="imageFileNameValue">
+          <item row="1" column="3">
+           <widget class="QLabel" name="imageFileSizeValue">
             <property name="text">
              <string>-</string>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
             </property>
             <property name="styleSheet">
              <string>color: #666;</string>
             </property>
            </widget>
           </item>
-          <item row="4" column="0">
-           <widget class="QLabel" name="label_img_filesize">
+          <item row="2" column="0" colspan="4">
+           <widget class="QLabel" name="label_img_filename">
             <property name="text">
-             <string>文件大小:</string>
+             <string>文件名:</string>
             </property>
            </widget>
           </item>
-          <item row="4" column="1">
-           <widget class="QLabel" name="imageFileSizeValue">
+          <item row="3" column="0" colspan="4">
+           <widget class="QLabel" name="imageFileNameValue">
             <property name="text">
              <string>-</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
             </property>
             <property name="styleSheet">
              <string>color: #666;</string>
@@ -276,25 +276,62 @@
          <property name="title">
           <string>操作</string>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout">
-          <item>
+         <layout class="QGridLayout" name="buttonsGridLayout">
+          <item row="0" column="0" colspan="2">
            <widget class="QPushButton" name="loadImageBtn">
             <property name="text">
              <string>加载图片</string>
             </property>
            </widget>
           </item>
-          <item>
+          <item row="0" column="2" colspan="2">
+           <widget class="QPushButton" name="loadFolderBtn">
+            <property name="text">
+             <string>打开文件夹</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" colspan="2">
            <widget class="QPushButton" name="loadConfigBtn">
             <property name="text">
              <string>加载配置</string>
             </property>
            </widget>
           </item>
-          <item>
+          <item row="1" column="2" colspan="2">
            <widget class="QPushButton" name="saveConfigBtn">
             <property name="text">
              <string>保存配置</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QPushButton" name="prevImageBtn">
+            <property name="text">
+             <string>上一张</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1" colspan="2">
+           <widget class="QLabel" name="imageCounterLabel">
+            <property name="text">
+             <string>-/-</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="3">
+           <widget class="QPushButton" name="nextImageBtn">
+            <property name="text">
+             <string>下一张</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
             </property>
            </widget>
           </item>
@@ -481,18 +518,22 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="fitToScreenBtn">
-            <property name="text">
-             <string>适应屏幕</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="actualSizeBtn">
-            <property name="text">
-             <string>实际大小</string>
-            </property>
-           </widget>
+           <layout class="QHBoxLayout" name="zoomPresetLayout">
+            <item>
+             <widget class="QPushButton" name="fitToScreenBtn">
+              <property name="text">
+               <string>适应屏幕</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="actualSizeBtn">
+              <property name="text">
+               <string>实际大小</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
          </layout>
         </widget>

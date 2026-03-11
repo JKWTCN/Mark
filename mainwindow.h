@@ -94,6 +94,9 @@ private slots:
     void onDeletePointClicked();
     void onEditPointClicked();
     void onCopyPointClicked();
+    void loadFolder();
+    void previousImage();
+    void nextImage();
 
 private:
     Ui::MainWindow *ui;
@@ -104,6 +107,11 @@ private:
     // Image file information
     QString currentImageFileName;
     qint64 currentImageFileSize = 0;
+
+    // Image list management
+    QStringList imageFileList;      // 所有图片文件路径列表
+    int currentImageIndex = -1;     // 当前图片索引（-1表示单张图片模式）
+    QString currentFolderPath;      // 当前打开的文件夹路径
 
     // Drag functionality
     bool isDragging = false;
@@ -148,5 +156,10 @@ private:
     int normalizedStringToPixel(const QString& normalizedStr, int maxValue);
     QString formatCoordinates(int x, int y, CoordinateFormat format);
     CoordinateFormat getCurrentCoordinateFormat() const;
+
+    // Image navigation helper functions
+    void loadImageAtIndex(int index);
+    void updateNavigationButtons();
+    void updateImageCounterDisplay();
 };
 #endif // MAINWINDOW_H
