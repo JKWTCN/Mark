@@ -87,7 +87,7 @@ QString MainWindow::rgbToHsl(int r, int g, int b)
     color.getHsl(&h, &s, &l);
 
     return QString("HSL(%1°, %2%, %3%)")
-        .arg(h == 0 && r == 0 && g == 0 && b == 0 ? 0 : h)
+        .arg(h < 0 ? 0 : h)
         .arg(qRound(s / 2.55))
         .arg(qRound(l / 2.55));
 }
@@ -99,7 +99,7 @@ QString MainWindow::rgbToHsv(int r, int g, int b)
     color.getHsv(&h, &s, &v);
 
     return QString("HSV(%1°, %2%, %3%)")
-        .arg(h == 0 && r == 0 && g == 0 && b == 0 ? 0 : h)
+        .arg(h < 0 ? 0 : h)
         .arg(qRound(s / 2.55))
         .arg(qRound(v / 2.55));
 }
@@ -119,9 +119,9 @@ QString MainWindow::rgbToCmyk(int r, int g, int b)
 
 QString MainWindow::pixelToNormalizedString(int pixel, int maxValue)
 {
-    if (maxValue <= 0) return "0.000";
+    if (maxValue <= 0) return "0.000000";
     double normalized = static_cast<double>(pixel) / maxValue;
-    return QString::number(normalized, 'f', 3);
+    return QString::number(normalized, 'f', 6);
 }
 
 int MainWindow::normalizedStringToPixel(const QString& normalizedStr, int maxValue)
@@ -528,8 +528,7 @@ void MainWindow::updatePointsList()
         // 创建列表项文本
         QString colorText = formatColorToString(point.r, point.g, point.b, colorFormat);
         QString coordText = formatCoordinates(point.x, point.y, coordFormat);
-        QString text = QString("点 %1: %2 %3")
-            .arg(i + 1)
+        QString text = QString("%1 %2")
             .arg(coordText)
             .arg(colorText);
 
@@ -569,8 +568,8 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
 
             QDoubleSpinBox* xSpinBox = new QDoubleSpinBox(&dialog);
             xSpinBox->setRange(0.0, 1.0);
-            xSpinBox->setDecimals(3);
-            xSpinBox->setSingleStep(0.001);
+            xSpinBox->setDecimals(6);
+            xSpinBox->setSingleStep(0.000001);
             double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
             xSpinBox->setValue(normX);
             layout->addRow("X坐标 (归一化):", xSpinBox);
@@ -578,8 +577,8 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
 
             QDoubleSpinBox* ySpinBox = new QDoubleSpinBox(&dialog);
             ySpinBox->setRange(0.0, 1.0);
-            ySpinBox->setDecimals(3);
-            ySpinBox->setSingleStep(0.001);
+            ySpinBox->setDecimals(6);
+            ySpinBox->setSingleStep(0.000001);
             double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
             ySpinBox->setValue(normY);
             layout->addRow("Y坐标 (归一化):", ySpinBox);
@@ -958,16 +957,16 @@ void MainWindow::onAddPointManuallyClicked()
     if (coordFormat == CoordinateFormat::Normalized) {
         QDoubleSpinBox* xSpinBox = new QDoubleSpinBox(&dialog);
         xSpinBox->setRange(0.0, 1.0);
-        xSpinBox->setDecimals(3);
-        xSpinBox->setSingleStep(0.001);
+        xSpinBox->setDecimals(6);
+        xSpinBox->setSingleStep(0.000001);
         xSpinBox->setValue(0.5);
         layout->addRow("X坐标 (归一化):", xSpinBox);
         xInputWidget = xSpinBox;
 
         QDoubleSpinBox* ySpinBox = new QDoubleSpinBox(&dialog);
         ySpinBox->setRange(0.0, 1.0);
-        ySpinBox->setDecimals(3);
-        ySpinBox->setSingleStep(0.001);
+        ySpinBox->setDecimals(6);
+        ySpinBox->setSingleStep(0.000001);
         ySpinBox->setValue(0.5);
         layout->addRow("Y坐标 (归一化):", ySpinBox);
         yInputWidget = ySpinBox;
@@ -1128,7 +1127,7 @@ void MainWindow::onCopyPointClicked()
         }
         double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
         double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
-        coordPart = QString("%1,%2").arg(normX, 0, 'f', 3).arg(normY, 0, 'f', 3);
+        coordPart = QString("%1,%2").arg(normX, 0, 'f', 6).arg(normY, 0, 'f', 6);
     } else {
         coordPart = QString("%1,%2").arg(point.x).arg(point.y);
     }
@@ -1157,7 +1156,7 @@ void MainWindow::onCopyPointClicked()
             color.getHsl(&h, &s, &l);
             copyText = QString("[%1,%2,%3,%4]")
                 .arg(coordPart)
-                .arg(h == 0 && point.r == 0 && point.g == 0 && point.b == 0 ? 0 : h)
+                .arg(h < 0 ? 0 : h)
                 .arg(qRound(s / 2.55))
                 .arg(qRound(l / 2.55));
             break;
@@ -1169,7 +1168,7 @@ void MainWindow::onCopyPointClicked()
             color.getHsv(&h, &s, &v);
             copyText = QString("[%1,%2,%3,%4]")
                 .arg(coordPart)
-                .arg(h == 0 && point.r == 0 && point.g == 0 && point.b == 0 ? 0 : h)
+                .arg(h < 0 ? 0 : h)
                 .arg(qRound(s / 2.55))
                 .arg(qRound(v / 2.55));
             break;
