@@ -16,13 +16,17 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
-     <widget class="QWidget" name="controlPanel">
-      <property name="maximumSize">
-       <size>
-        <width>300</width>
-        <height>16777215</height>
-       </size>
+     <widget class="QSplitter" name="splitter">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
       </property>
+      <widget class="QWidget" name="controlPanel">
+       <property name="minimumSize">
+        <size>
+         <width>200</width>
+         <height>0</height>
+        </size>
+       </property>
       <layout class="QVBoxLayout" name="controlPanelLayout">
        <item>
         <widget class="QGroupBox" name="configGroup">
@@ -421,9 +425,7 @@
        </item>
       </layout>
      </widget>
-    </item>
-    <item>
-     <widget class="QWidget" name="imageContainer">
+      <widget class="QWidget" name="imageContainer">
       <layout class="QVBoxLayout" name="verticalLayout_3">
        <item>
         <widget class="QScrollArea" name="scrollArea">
@@ -468,6 +470,7 @@
        </item>
       </layout>
      </widget>
+    </widget>
     </item>
    </layout>
   </widget>

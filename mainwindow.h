@@ -113,9 +113,6 @@ private:
     // Selected point index in the list (-1 means no selection)
     int selectedPointIndex = -1;
 
-    // Splitter for resizable panels
-    QSplitter* splitter;
-
     void setupConnections();
     void updatePointsList();
     void addDetectionPoint(const QPoint& pos);

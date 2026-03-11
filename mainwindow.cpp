@@ -38,30 +38,13 @@ MainWindow::MainWindow(QWidget *parent)
     // Remove the maximum height constraint from pointsGroup
     ui->pointsGroup->setMaximumSize(16777215, 16777215);
 
-    // Create splitter to make control panel resizable
-    splitter = new QSplitter(Qt::Horizontal, this);
-
-    // Get the existing layout and remove widgets from it
-    QHBoxLayout* mainLayout = ui->horizontalLayout;
-    QWidget* controlPanel = ui->controlPanel;
-    QWidget* imageContainer = ui->imageContainer;
-
-    // Remove widgets from the layout
-    mainLayout->removeWidget(controlPanel);
-    mainLayout->removeWidget(imageContainer);
-
-    // Add widgets to splitter
-    splitter->addWidget(controlPanel);
-    splitter->addWidget(imageContainer);
-
-    // Set initial sizes - control panel gets 300px, rest goes to image
-    splitter->setSizes({300, 900});
+    // Set initial sizes for the splitter (defined in UI file)
+    // control panel gets 300px, rest goes to image
+    ui->splitter->setSizes({300, 900});
 
     // Set stretch factor so image container gets more space when resizing
-    splitter->setStretchFactor(1, 1);
+    ui->splitter->setStretchFactor(1, 1);
 
-    // Add splitter to the main layout
-    mainLayout->addWidget(splitter);
     // Initialize image info display
     updateImageInfoDisplay();
 }
