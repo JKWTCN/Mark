@@ -19,15 +19,20 @@ class MainWindow;
 QT_END_NAMESPACE
 
 struct DetectionPoint {
-    int x;
-    int y;
-    int r;
-    int g;
-    int b;
+    int x;          // 像素坐标 x
+    int y;          // 像素坐标 y
+    double normX;   // 归一化坐标 x (0.0-1.0)
+    double normY;   // 归一化坐标 y (0.0-1.0)
+    int r, g, b;    // 颜色值
 
-    DetectionPoint() : x(0), y(0), r(0), g(0), b(0) {}
-    DetectionPoint(int x, int y, int r, int g, int b) : x(x), y(y), r(r), g(g), b(b) {}
+    // 默认构造函数
+    DetectionPoint() : x(0), y(0), normX(0.0), normY(0.0), r(0), g(0), b(0) {}
 
+    // 带参数的构造函数（像素坐标）
+    DetectionPoint(int x, int y, int r, int g, int b, double normX = 0.0, double normY = 0.0)
+        : x(x), y(y), normX(normX), normY(normY), r(r), g(g), b(b) {}
+
+    // toJson: 保存所有坐标信息
     QJsonArray toJson() const {
         QJsonArray arr;
         arr.append(x);
@@ -35,16 +40,25 @@ struct DetectionPoint {
         arr.append(r);
         arr.append(g);
         arr.append(b);
+        arr.append(normX);  // 新增
+        arr.append(normY);  // 新增
         return arr;
     }
 
+    // fromJson: 加载所有坐标信息（向后兼容旧格式）
     static DetectionPoint fromJson(const QJsonArray& arr) {
+        // 旧格式: [x, y, r, g, b]
+        // 新格式: [x, y, r, g, b, normX, normY]
+        double normX = (arr.size() > 5) ? arr[5].toDouble() : 0.0;
+        double normY = (arr.size() > 6) ? arr[6].toDouble() : 0.0;
         return DetectionPoint(
             arr[0].toInt(),
             arr[1].toInt(),
             arr[2].toInt(),
             arr[3].toInt(),
-            arr[4].toInt()
+            arr[4].toInt(),
+            normX,
+            normY
         );
     }
 };
@@ -147,6 +161,9 @@ private:
     int lastUsedColorFormat = 0;  // 0 = RGB (default)
     int lastUsedCoordinateFormat = 0;  // 0 = Pixel (默认)
 
+    // Coordinate format state tracking
+    int currentCoordinateFormat = 0;  // Track the current coordinate format display
+
     // Display settings - decimal places
     int normalizedDecimals = 6;
     int colorDecimals = 0;
@@ -157,6 +174,7 @@ private:
     int normalizedStringToPixel(const QString& normalizedStr, int maxValue);
     QString formatCoordinates(int x, int y, CoordinateFormat format);
     CoordinateFormat getCurrentCoordinateFormat() const;
+    void convertCoordinateFormat(CoordinateFormat newFormat);
 
     // Image navigation helper functions
     void loadImageAtIndex(int index);

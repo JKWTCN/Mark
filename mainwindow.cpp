@@ -57,6 +57,9 @@ MainWindow::MainWindow(QWidget *parent)
     ui->colorDecimalsSpin->setValue(colorDecimals);
     ui->fileSizeDecimalsSpin->setValue(fileSizeDecimals);
 
+    // Initialize coordinate format state
+    currentCoordinateFormat = 0;  // Start with pixel format
+
     // Connect display settings signals
     connect(ui->normalizedDecimalsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
         normalizedDecimals = value;
@@ -179,6 +182,13 @@ CoordinateFormat MainWindow::getCurrentCoordinateFormat() const
     return static_cast<CoordinateFormat>(index);
 }
 
+void MainWindow::convertCoordinateFormat(CoordinateFormat newFormat)
+{
+    // 只更新当前坐标格式状态，不再需要转换存储的坐标值
+    // 因为现在同时存储归一化坐标和像素坐标
+    currentCoordinateFormat = static_cast<int>(newFormat);
+}
+
 QString MainWindow::formatColorToString(int r, int g, int b, ColorFormat format)
 {
     switch (format) {
@@ -258,7 +268,9 @@ void MainWindow::setupConnections()
     connect(ui->colorFormatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
         updatePointsList();
     });
-    connect(ui->coordinateFormatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+    connect(ui->coordinateFormatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        CoordinateFormat newFormat = static_cast<CoordinateFormat>(index);
+        convertCoordinateFormat(newFormat);
         updatePointsList();
     });
     connect(ui->pointsList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *item) {
@@ -494,7 +506,14 @@ void MainWindow::wheelEvent(QWheelEvent *event)
 void MainWindow::addDetectionPoint(const QPoint& pos)
 {
     QColor color = getPixelColor(pos);
-    DetectionPoint point(pos.x(), pos.y(), color.red(), color.green(), color.blue());
+
+    double normX = 0.0, normY = 0.0;
+    if (!currentImage.isNull()) {
+        normX = double(pos.x()) / (currentImage.width() - 1);
+        normY = double(pos.y()) / (currentImage.height() - 1);
+    }
+
+    DetectionPoint point(pos.x(), pos.y(), color.red(), color.green(), color.blue(), normX, normY);
     detectionPoints.append(point);
     updatePointsList();
     drawDetectionPoints();
@@ -564,7 +583,16 @@ void MainWindow::updatePointsList()
 
         // 创建列表项文本
         QString colorText = formatColorToString(point.r, point.g, point.b, colorFormat);
-        QString coordText = formatCoordinates(point.x, point.y, coordFormat);
+        QString coordText;
+        if (coordFormat == CoordinateFormat::Normalized) {
+            // 直接使用存储的归一化坐标，避免从像素坐标重新计算引入舍入误差
+            coordText = QString("(%1, %2)")
+                .arg(QString::number(point.normX, 'f', normalizedDecimals))
+                .arg(QString::number(point.normY, 'f', normalizedDecimals));
+        } else {
+            // 像素坐标模式
+            coordText = QString("(%1, %2)").arg(point.x).arg(point.y);
+        }
         QString text = QString("%1 %2")
             .arg(coordText)
             .arg(colorText);
@@ -607,8 +635,7 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             xSpinBox->setRange(0.0, 1.0);
             xSpinBox->setDecimals(normalizedDecimals);
             xSpinBox->setSingleStep(qPow(10, -normalizedDecimals));
-            double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
-            xSpinBox->setValue(normX);
+            xSpinBox->setValue(point.normX);  // 直接使用存储的归一化坐标
             layout->addRow("X坐标 (归一化):", xSpinBox);
             xInputWidget = xSpinBox;
 
@@ -616,8 +643,7 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             ySpinBox->setRange(0.0, 1.0);
             ySpinBox->setDecimals(normalizedDecimals);
             ySpinBox->setSingleStep(qPow(10, -normalizedDecimals));
-            double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
-            ySpinBox->setValue(normY);
+            ySpinBox->setValue(point.normY);  // 直接使用存储的归一化坐标
             layout->addRow("Y坐标 (归一化):", ySpinBox);
             yInputWidget = ySpinBox;
         } else {
@@ -699,6 +725,13 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             // 更新检测点
             point.x = newX;
             point.y = newY;
+            // 如果是归一化坐标模式，同时更新归一化坐标
+            if (coordFormat == CoordinateFormat::Normalized) {
+                QDoubleSpinBox* xSpin = static_cast<QDoubleSpinBox*>(xInputWidget);
+                QDoubleSpinBox* ySpin = static_cast<QDoubleSpinBox*>(yInputWidget);
+                point.normX = xSpin->value();
+                point.normY = ySpin->value();
+            }
             point.r = newColor.red();
             point.g = newColor.green();
             point.b = newColor.blue();
@@ -1072,13 +1105,14 @@ void MainWindow::onAddPointManuallyClicked()
     // 显示对话框
     if (dialog.exec() == QDialog::Accepted) {
         int x, y;
+        double normX = 0.0, normY = 0.0;
 
         if (coordFormat == CoordinateFormat::Normalized) {
             QDoubleSpinBox* xSpin = static_cast<QDoubleSpinBox*>(xInputWidget);
             QDoubleSpinBox* ySpin = static_cast<QDoubleSpinBox*>(yInputWidget);
 
-            double normX = xSpin->value();
-            double normY = ySpin->value();
+            normX = xSpin->value();
+            normY = ySpin->value();
 
             x = qRound(normX * (currentImage.width() - 1));
             y = qRound(normY * (currentImage.height() - 1));
@@ -1088,6 +1122,10 @@ void MainWindow::onAddPointManuallyClicked()
 
             x = xSpin->value();
             y = ySpin->value();
+
+            // 计算归一化坐标
+            normX = double(x) / (currentImage.width() - 1);
+            normY = double(y) / (currentImage.height() - 1);
         }
 
         // 验证坐标
@@ -1096,8 +1134,12 @@ void MainWindow::onAddPointManuallyClicked()
             return;
         }
 
-        // 添加检测点
-        addDetectionPoint(QPoint(x, y));
+        // 添加检测点（同时存储归一化坐标和像素坐标）
+        QColor color = getPixelColor(QPoint(x, y));
+        DetectionPoint point(x, y, color.red(), color.green(), color.blue(), normX, normY);
+        detectionPoints.append(point);
+        updatePointsList();
+        drawDetectionPoints();
     }
 }
 
@@ -1152,12 +1194,34 @@ void MainWindow::updatePointsRGBFromImage()
         return;
     }
 
+    CoordinateFormat coordFormat = getCurrentCoordinateFormat();
+
     for (DetectionPoint& point : detectionPoints) {
+        int pixelX, pixelY;
+
+        // 判断是否使用归一化坐标（归一化模式且有存储的归一化坐标）
+        bool useNormalized = (coordFormat == CoordinateFormat::Normalized) &&
+                             (point.normX > 0 || point.normY > 0);
+
+        if (useNormalized) {
+            // 归一化模式：直接使用存储的归一化坐标
+            pixelX = qRound(point.normX * (currentImage.width() - 1));
+            pixelY = qRound(point.normY * (currentImage.height() - 1));
+
+            // 同步更新像素坐标
+            point.x = pixelX;
+            point.y = pixelY;
+        } else {
+            // 像素模式：直接使用存储的像素坐标
+            pixelX = point.x;
+            pixelY = point.y;
+        }
+
         // 检查坐标是否在图片范围内
-        if (point.x >= 0 && point.x < currentImage.width() &&
-            point.y >= 0 && point.y < currentImage.height()) {
+        if (pixelX >= 0 && pixelX < currentImage.width() &&
+            pixelY >= 0 && pixelY < currentImage.height()) {
             // 从新图片获取该坐标的RGB值
-            QColor color = currentImage.pixel(point.x, point.y);
+            QColor color = currentImage.pixel(pixelX, pixelY);
             point.r = color.red();
             point.g = color.green();
             point.b = color.blue();
