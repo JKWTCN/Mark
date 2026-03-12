@@ -213,6 +213,285 @@ ColorFormat MainWindow::getCurrentColorFormat() const
     return static_cast<ColorFormat>(index);
 }
 
+// New color conversion helpers for JSON import/export (return numeric values)
+
+QList<double> MainWindow::rgbToHsvValues(int r, int g, int b) const
+{
+    QColor color(r, g, b);
+    int h, s, v;
+    color.getHsv(&h, &s, &v);
+
+    double hDeg = (h < 0) ? 0.0 : static_cast<double>(h);
+    double sPercent = s / 2.55;
+    double vPercent = v / 2.55;
+
+    return {hDeg, sPercent, vPercent};
+}
+
+QList<double> MainWindow::rgbToHslValues(int r, int g, int b) const
+{
+    QColor color(r, g, b);
+    int h, s, l;
+    color.getHsl(&h, &s, &l);
+
+    double hDeg = (h < 0) ? 0.0 : static_cast<double>(h);
+    double sPercent = s / 2.55;
+    double lPercent = l / 2.55;
+
+    return {hDeg, sPercent, lPercent};
+}
+
+QList<double> MainWindow::rgbToCmykValues(int r, int g, int b) const
+{
+    QColor color(r, g, b);
+    int c, m, y, k;
+    color.getCmyk(&c, &m, &y, &k);
+
+    return {static_cast<double>(c), static_cast<double>(m),
+            static_cast<double>(y), static_cast<double>(k)};
+}
+
+QList<int> MainWindow::hsvToRgb(double h, double s, double v) const
+{
+    QColor color;
+    color.setHsv(static_cast<int>(h),
+                 static_cast<int>(s * 2.55),
+                 static_cast<int>(v * 2.55));
+    return {color.red(), color.green(), color.blue()};
+}
+
+QList<int> MainWindow::hslToRgb(double h, double s, double l) const
+{
+    QColor color;
+    color.setHsl(static_cast<int>(h),
+                 static_cast<int>(s * 2.55),
+                 static_cast<int>(l * 2.55));
+    return {color.red(), color.green(), color.blue()};
+}
+
+QList<int> MainWindow::cmykToRgb(double c, double m, double y, double k) const
+{
+    QColor color;
+    color.setCmyk(static_cast<int>(c),
+                  static_cast<int>(m),
+                  static_cast<int>(y),
+                  static_cast<int>(k));
+    return {color.red(), color.green(), color.blue()};
+}
+
+QList<int> MainWindow::hexToRgb(const QString& hex) const
+{
+    QString h = hex;
+    if (h.startsWith('#')) {
+        h = h.mid(1);
+    }
+
+    bool ok;
+    int r = h.mid(0, 2).toInt(&ok, 16);
+    int g = h.mid(2, 2).toInt(&ok, 16);
+    int b = h.mid(4, 2).toInt(&ok, 16);
+
+    return {r, g, b};
+}
+
+QString MainWindow::colorFormatToString(ColorFormat format) const
+{
+    switch (format) {
+        case ColorFormat::RGB: return "rgb";
+        case ColorFormat::HEX: return "hex";
+        case ColorFormat::HSL: return "hsl";
+        case ColorFormat::HSV: return "hsv";
+        case ColorFormat::CMYK: return "cmyk";
+        default: return "rgb";
+    }
+}
+
+ColorFormat MainWindow::stringToColorFormat(const QString& str) const
+{
+    QString lower = str.toLower();
+    if (lower == "hex") return ColorFormat::HEX;
+    if (lower == "hsl") return ColorFormat::HSL;
+    if (lower == "hsv") return ColorFormat::HSV;
+    if (lower == "cmyk") return ColorFormat::CMYK;
+    return ColorFormat::RGB;
+}
+
+// DetectionPoint::toJson - 根据格式设置导出为对应格式
+QJsonArray DetectionPoint::toJson(CoordinateFormat xyFormat, ColorFormat colorFormat,
+                                  int imgWidth, int imgHeight,
+                                  int normDecimals, int colorDecimals) const
+{
+    QJsonArray arr;
+
+    // 根据坐标格式添加坐标
+    if (xyFormat == CoordinateFormat::Normalized) {
+        double normX = double(x) / qMax(1, imgWidth - 1);
+        double normY = double(y) / qMax(1, imgHeight - 1);
+        arr.append(QString::number(normX, 'f', normDecimals).toDouble());
+        arr.append(QString::number(normY, 'f', normDecimals).toDouble());
+    } else {
+        arr.append(x);
+        arr.append(y);
+    }
+
+    // 根据颜色格式添加颜色
+    switch (colorFormat) {
+        case ColorFormat::RGB:
+            arr.append(r);
+            arr.append(g);
+            arr.append(b);
+            break;
+
+        case ColorFormat::HEX: {
+            QString hex = QString("#%1%2%3")
+                .arg(r, 2, 16, QChar('0'))
+                .arg(g, 2, 16, QChar('0'))
+                .arg(b, 2, 16, QChar('0'));
+            arr.append(hex);
+            break;
+        }
+
+        case ColorFormat::HSV: {
+            // 使用 MainWindow 的 rgbToHsvValues 方法
+            // 需要通过静态获取或作为参数传入，这里手动实现转换
+            QColor color(r, g, b);
+            int h, s, v;
+            color.getHsv(&h, &s, &v);
+            double hDeg = (h < 0) ? 0.0 : static_cast<double>(h);
+            double sPercent = s / 2.55;
+            double vPercent = v / 2.55;
+            arr.append(QString::number(hDeg, 'f', colorDecimals).toDouble());
+            arr.append(QString::number(sPercent, 'f', colorDecimals).toDouble());
+            arr.append(QString::number(vPercent, 'f', colorDecimals).toDouble());
+            break;
+        }
+
+        case ColorFormat::HSL: {
+            QColor color(r, g, b);
+            int h, s, l;
+            color.getHsl(&h, &s, &l);
+            double hDeg = (h < 0) ? 0.0 : static_cast<double>(h);
+            double sPercent = s / 2.55;
+            double lPercent = l / 2.55;
+            arr.append(QString::number(hDeg, 'f', colorDecimals).toDouble());
+            arr.append(QString::number(sPercent, 'f', colorDecimals).toDouble());
+            arr.append(QString::number(lPercent, 'f', colorDecimals).toDouble());
+            break;
+        }
+
+        case ColorFormat::CMYK: {
+            QColor color(r, g, b);
+            int c, m, y, k;
+            color.getCmyk(&c, &m, &y, &k);
+            arr.append(static_cast<double>(c));
+            arr.append(static_cast<double>(m));
+            arr.append(static_cast<double>(y));
+            arr.append(static_cast<double>(k));
+            break;
+        }
+    }
+
+    return arr;
+}
+
+// DetectionPoint::fromJson - 从任意格式解析回内部表示（像素坐标 + RGB）
+DetectionPoint DetectionPoint::fromJson(const QJsonArray& arr,
+                                       CoordinateFormat xyFormat, ColorFormat colorFormat,
+                                       int imgWidth, int imgHeight)
+{
+    DetectionPoint point;
+
+    // 根据坐标格式解析坐标
+    if (xyFormat == CoordinateFormat::Normalized) {
+        double normX = arr[0].toDouble();
+        double normY = arr[1].toDouble();
+        point.x = qRound(normX * qMax(1, imgWidth - 1));
+        point.y = qRound(normY * qMax(1, imgHeight - 1));
+    } else {
+        point.x = arr[0].toInt();
+        point.y = arr[1].toInt();
+    }
+
+    // 根据颜色格式解析颜色
+    switch (colorFormat) {
+        case ColorFormat::RGB:
+            point.r = arr[2].toInt();
+            point.g = arr[3].toInt();
+            point.b = arr[4].toInt();
+            break;
+
+        case ColorFormat::HEX: {
+            QString hex = arr[2].toString();
+            bool ok;
+            point.r = hex.mid(1, 2).toInt(&ok, 16);
+            point.g = hex.mid(3, 2).toInt(&ok, 16);
+            point.b = hex.mid(5, 2).toInt(&ok, 16);
+            break;
+        }
+
+        case ColorFormat::HSV: {
+            double h = arr[2].toDouble();
+            double s = arr[3].toDouble();
+            double v = arr[4].toDouble();
+            QColor color;
+            color.setHsv(static_cast<int>(h),
+                        static_cast<int>(s * 2.55),
+                        static_cast<int>(v * 2.55));
+            point.r = color.red();
+            point.g = color.green();
+            point.b = color.blue();
+            break;
+        }
+
+        case ColorFormat::HSL: {
+            double h = arr[2].toDouble();
+            double s = arr[3].toDouble();
+            double l = arr[4].toDouble();
+            QColor color;
+            color.setHsl(static_cast<int>(h),
+                        static_cast<int>(s * 2.55),
+                        static_cast<int>(l * 2.55));
+            point.r = color.red();
+            point.g = color.green();
+            point.b = color.blue();
+            break;
+        }
+
+        case ColorFormat::CMYK: {
+            double c = arr[2].toDouble();
+            double m = arr[3].toDouble();
+            double y = arr[4].toDouble();
+            double k = arr[5].toDouble();
+            QColor color;
+            color.setCmyk(static_cast<int>(c),
+                         static_cast<int>(m),
+                         static_cast<int>(y),
+                         static_cast<int>(k));
+            point.r = color.red();
+            point.g = color.green();
+            point.b = color.blue();
+            break;
+        }
+    }
+
+    return point;
+}
+
+// DetectionPoint::fromJsonLegacy - 向后兼容旧格式（没有格式信息的 JSON）
+DetectionPoint DetectionPoint::fromJsonLegacy(const QJsonArray& arr)
+{
+    // 旧格式: [x, y, r, g, b, normX?, normY?]
+    // 只返回像素坐标和 RGB
+    return DetectionPoint(
+        arr[0].toInt(),
+        arr[1].toInt(),
+        arr[2].toInt(),
+        arr[3].toInt(),
+        arr[4].toInt()
+    );
+}
+
+
 QString MainWindow::formatFileSize(qint64 bytes)
 {
     if (bytes < 1024) {
@@ -507,13 +786,7 @@ void MainWindow::addDetectionPoint(const QPoint& pos)
 {
     QColor color = getPixelColor(pos);
 
-    double normX = 0.0, normY = 0.0;
-    if (!currentImage.isNull()) {
-        normX = double(pos.x()) / (currentImage.width() - 1);
-        normY = double(pos.y()) / (currentImage.height() - 1);
-    }
-
-    DetectionPoint point(pos.x(), pos.y(), color.red(), color.green(), color.blue(), normX, normY);
+    DetectionPoint point(pos.x(), pos.y(), color.red(), color.green(), color.blue());
     detectionPoints.append(point);
     updatePointsList();
     drawDetectionPoints();
@@ -585,10 +858,16 @@ void MainWindow::updatePointsList()
         QString colorText = formatColorToString(point.r, point.g, point.b, colorFormat);
         QString coordText;
         if (coordFormat == CoordinateFormat::Normalized) {
-            // 直接使用存储的归一化坐标，避免从像素坐标重新计算引入舍入误差
-            coordText = QString("(%1, %2)")
-                .arg(QString::number(point.normX, 'f', normalizedDecimals))
-                .arg(QString::number(point.normY, 'f', normalizedDecimals));
+            // 从像素坐标实时计算归一化坐标
+            if (!currentImage.isNull()) {
+                double normX = double(point.x) / qMax(1, currentImage.width() - 1);
+                double normY = double(point.y) / qMax(1, currentImage.height() - 1);
+                coordText = QString("(%1, %2)")
+                    .arg(QString::number(normX, 'f', normalizedDecimals))
+                    .arg(QString::number(normY, 'f', normalizedDecimals));
+            } else {
+                coordText = "(?, ?)";
+            }
         } else {
             // 像素坐标模式
             coordText = QString("(%1, %2)").arg(point.x).arg(point.y);
@@ -635,7 +914,9 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             xSpinBox->setRange(0.0, 1.0);
             xSpinBox->setDecimals(normalizedDecimals);
             xSpinBox->setSingleStep(qPow(10, -normalizedDecimals));
-            xSpinBox->setValue(point.normX);  // 直接使用存储的归一化坐标
+            // 从像素坐标实时计算归一化坐标
+            double normX = double(point.x) / qMax(1, currentImage.width() - 1);
+            xSpinBox->setValue(normX);
             layout->addRow("X坐标 (归一化):", xSpinBox);
             xInputWidget = xSpinBox;
 
@@ -643,7 +924,8 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             ySpinBox->setRange(0.0, 1.0);
             ySpinBox->setDecimals(normalizedDecimals);
             ySpinBox->setSingleStep(qPow(10, -normalizedDecimals));
-            ySpinBox->setValue(point.normY);  // 直接使用存储的归一化坐标
+            double normY = double(point.y) / qMax(1, currentImage.height() - 1);
+            ySpinBox->setValue(normY);
             layout->addRow("Y坐标 (归一化):", ySpinBox);
             yInputWidget = ySpinBox;
         } else {
@@ -725,13 +1007,6 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             // 更新检测点
             point.x = newX;
             point.y = newY;
-            // 如果是归一化坐标模式，同时更新归一化坐标
-            if (coordFormat == CoordinateFormat::Normalized) {
-                QDoubleSpinBox* xSpin = static_cast<QDoubleSpinBox*>(xInputWidget);
-                QDoubleSpinBox* ySpin = static_cast<QDoubleSpinBox*>(yInputWidget);
-                point.normX = xSpin->value();
-                point.normY = ySpin->value();
-            }
             point.r = newColor.red();
             point.g = newColor.green();
             point.b = newColor.blue();
@@ -825,37 +1100,39 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 bool MainWindow::saveJsonConfig(const QString& filePath)
 {
     QJsonObject root;
-    QJsonArray pointsArray;
 
-    for (const auto& point : detectionPoints) {
-        pointsArray.append(point.toJson());
-    }
-    root["point"] = pointsArray;
+    // 获取当前格式
+    CoordinateFormat xyFormat = getCurrentCoordinateFormat();
+    ColorFormat colorFormat = getCurrentColorFormat();
 
-    // Save color format preference
-    root["colorFormat"] = ui->colorFormatCombo->currentIndex();
+    // 保存格式设置
+    root["xyFormat"] = (xyFormat == CoordinateFormat::Normalized) ? "normalized" : "pixel";
+    root["colorFormat"] = colorFormatToString(colorFormat);
 
-    // Save coordinate format preference
-    root["coordinateFormat"] = ui->coordinateFormatCombo->currentIndex();
-
-    // Save image dimensions
+    // 保存图片和屏幕尺寸
     if (!currentImage.isNull()) {
         root["imageWidth"] = currentImage.width();
         root["imageHeight"] = currentImage.height();
     }
-
-    // Save screen dimensions
     root["screenWidth"] = ui->screenWidthSpin->value();
     root["screenHeight"] = ui->screenHeightSpin->value();
 
-    // Save config name
-    root["configName"] = ui->configNameEdit->text();
-
-    // Save display settings - decimal places
+    // 保存显示设置
     root["normalizedDecimals"] = normalizedDecimals;
     root["colorDecimals"] = colorDecimals;
     root["fileSizeDecimals"] = fileSizeDecimals;
+    root["configName"] = ui->configNameEdit->text();
 
+    // 根据当前格式保存点数据
+    QJsonArray pointsArray;
+    for (const auto& point : detectionPoints) {
+        pointsArray.append(point.toJson(xyFormat, colorFormat,
+                                        currentImage.width(), currentImage.height(),
+                                        normalizedDecimals, colorDecimals));
+    }
+    root["points"] = pointsArray;
+
+    // 写入文件
     QJsonDocument doc(root);
     QFile file(filePath);
     if (file.open(QIODevice::WriteOnly)) {
@@ -903,29 +1180,72 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
     QJsonObject root = doc.object();
     detectionPoints.clear();
 
-    if (root.contains("point") && root["point"].isArray()) {
-        QJsonArray pointsArray = root["point"].toArray();
-        for (const QJsonValue& value : pointsArray) {
-            if (value.isArray()) {
-                detectionPoints.append(DetectionPoint::fromJson(value.toArray()));
+    // 检测是否为新格式（包含 xyFormat, colorFormat 和 points 字段）
+    bool isNewFormat = root.contains("xyFormat") && root.contains("colorFormat") && root.contains("points");
+
+    if (isNewFormat) {
+        // 新格式：读取格式设置
+        CoordinateFormat xyFormat = CoordinateFormat::Pixel;  // 默认
+        if (root["xyFormat"].isString()) {
+            QString formatStr = root["xyFormat"].toString();
+            xyFormat = (formatStr == "normalized") ?
+                       CoordinateFormat::Normalized : CoordinateFormat::Pixel;
+        }
+
+        ColorFormat colorFormat = ColorFormat::RGB;  // 默认
+        if (root["colorFormat"].isString()) {
+            colorFormat = stringToColorFormat(root["colorFormat"].toString());
+        }
+
+        // 恢复格式设置到界面
+        ui->coordinateFormatCombo->setCurrentIndex(static_cast<int>(xyFormat));
+        ui->colorFormatCombo->setCurrentIndex(static_cast<int>(colorFormat));
+
+        // 读取图片尺寸
+        int imgWidth = 1920, imgHeight = 1080;  // 默认值
+        if (root.contains("imageWidth") && root["imageWidth"].isDouble()) {
+            imgWidth = root["imageWidth"].toInt();
+        }
+        if (root.contains("imageHeight") && root["imageHeight"].isDouble()) {
+            imgHeight = root["imageHeight"].toInt();
+        }
+
+        // 读取点数据（根据存储的格式解析）
+        if (root["points"].isArray()) {
+            QJsonArray pointsArray = root["points"].toArray();
+            for (const QJsonValue& value : pointsArray) {
+                if (value.isArray()) {
+                    detectionPoints.append(DetectionPoint::fromJson(
+                        value.toArray(), xyFormat, colorFormat, imgWidth, imgHeight));
+                }
             }
         }
-    }
-
-    // Load color format preference (backward compatible - defaults to 0 if not present)
-    if (root.contains("colorFormat") && root["colorFormat"].isDouble()) {
-        int colorFormatIndex = root["colorFormat"].toInt();
-        ui->colorFormatCombo->setCurrentIndex(qBound(0, colorFormatIndex, 4));
     } else {
-        ui->colorFormatCombo->setCurrentIndex(0);  // Default to RGB
-    }
+        // 旧格式：使用旧加载逻辑（向后兼容）
+        if (root.contains("point") && root["point"].isArray()) {
+            QJsonArray pointsArray = root["point"].toArray();
+            for (const QJsonValue& value : pointsArray) {
+                if (value.isArray()) {
+                    detectionPoints.append(DetectionPoint::fromJsonLegacy(value.toArray()));
+                }
+            }
+        }
 
-    // Load coordinate format preference (向后兼容)
-    if (root.contains("coordinateFormat") && root["coordinateFormat"].isDouble()) {
-        int coordFormatIndex = root["coordinateFormat"].toInt();
-        ui->coordinateFormatCombo->setCurrentIndex(qBound(0, coordFormatIndex, 1));
-    } else {
-        ui->coordinateFormatCombo->setCurrentIndex(0);  // Default to Pixel
+        // Load color format preference (backward compatible - defaults to 0 if not present)
+        if (root.contains("colorFormat") && root["colorFormat"].isDouble()) {
+            int colorFormatIndex = root["colorFormat"].toInt();
+            ui->colorFormatCombo->setCurrentIndex(qBound(0, colorFormatIndex, 4));
+        } else {
+            ui->colorFormatCombo->setCurrentIndex(0);  // Default to RGB
+        }
+
+        // Load coordinate format preference (向后兼容)
+        if (root.contains("coordinateFormat") && root["coordinateFormat"].isDouble()) {
+            int coordFormatIndex = root["coordinateFormat"].toInt();
+            ui->coordinateFormatCombo->setCurrentIndex(qBound(0, coordFormatIndex, 1));
+        } else {
+            ui->coordinateFormatCombo->setCurrentIndex(0);  // Default to Pixel
+        }
     }
 
     // Load config name (backward compatible - defaults to empty string if not present)
@@ -1105,14 +1425,13 @@ void MainWindow::onAddPointManuallyClicked()
     // 显示对话框
     if (dialog.exec() == QDialog::Accepted) {
         int x, y;
-        double normX = 0.0, normY = 0.0;
 
         if (coordFormat == CoordinateFormat::Normalized) {
             QDoubleSpinBox* xSpin = static_cast<QDoubleSpinBox*>(xInputWidget);
             QDoubleSpinBox* ySpin = static_cast<QDoubleSpinBox*>(yInputWidget);
 
-            normX = xSpin->value();
-            normY = ySpin->value();
+            double normX = xSpin->value();
+            double normY = ySpin->value();
 
             x = qRound(normX * (currentImage.width() - 1));
             y = qRound(normY * (currentImage.height() - 1));
@@ -1122,10 +1441,6 @@ void MainWindow::onAddPointManuallyClicked()
 
             x = xSpin->value();
             y = ySpin->value();
-
-            // 计算归一化坐标
-            normX = double(x) / (currentImage.width() - 1);
-            normY = double(y) / (currentImage.height() - 1);
         }
 
         // 验证坐标
@@ -1134,9 +1449,9 @@ void MainWindow::onAddPointManuallyClicked()
             return;
         }
 
-        // 添加检测点（同时存储归一化坐标和像素坐标）
+        // 添加检测点（只存储像素坐标）
         QColor color = getPixelColor(QPoint(x, y));
-        DetectionPoint point(x, y, color.red(), color.green(), color.blue(), normX, normY);
+        DetectionPoint point(x, y, color.red(), color.green(), color.blue());
         detectionPoints.append(point);
         updatePointsList();
         drawDetectionPoints();
@@ -1194,28 +1509,10 @@ void MainWindow::updatePointsRGBFromImage()
         return;
     }
 
-    CoordinateFormat coordFormat = getCurrentCoordinateFormat();
-
     for (DetectionPoint& point : detectionPoints) {
-        int pixelX, pixelY;
-
-        // 判断是否使用归一化坐标（归一化模式且有存储的归一化坐标）
-        bool useNormalized = (coordFormat == CoordinateFormat::Normalized) &&
-                             (point.normX > 0 || point.normY > 0);
-
-        if (useNormalized) {
-            // 归一化模式：直接使用存储的归一化坐标
-            pixelX = qRound(point.normX * (currentImage.width() - 1));
-            pixelY = qRound(point.normY * (currentImage.height() - 1));
-
-            // 同步更新像素坐标
-            point.x = pixelX;
-            point.y = pixelY;
-        } else {
-            // 像素模式：直接使用存储的像素坐标
-            pixelX = point.x;
-            pixelY = point.y;
-        }
+        // 直接使用存储的像素坐标
+        int pixelX = point.x;
+        int pixelY = point.y;
 
         // 检查坐标是否在图片范围内
         if (pixelX >= 0 && pixelX < currentImage.width() &&
