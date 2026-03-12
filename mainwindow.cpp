@@ -6,6 +6,7 @@
 #include <QInputDialog>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QKeyEvent>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
@@ -769,6 +770,23 @@ void MainWindow::dropEvent(QDropEvent *event)
         }
     }
     event->acceptProposedAction();
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    // 只在文件夹模式下支持左右箭头翻页
+    if (!imageFileList.isEmpty()) {
+        if (event->key() == Qt::Key_Left) {
+            previousImage();
+            return;
+        } else if (event->key() == Qt::Key_Right) {
+            nextImage();
+            return;
+        }
+    }
+
+    // 其他按键交给父类处理
+    QMainWindow::keyPressEvent(event);
 }
 
 bool MainWindow::saveJsonConfig(const QString& filePath)
