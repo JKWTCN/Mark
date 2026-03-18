@@ -410,9 +410,16 @@ DetectionPoint DetectionPoint::fromJson(const QJsonArray& arr,
 
     // 根据坐标格式解析坐标
     if (xyFormat == CoordinateFormat::Normalized) {
-        // 存储归一化坐标
-        point.normX = arr[0].toDouble();
-        point.normY = arr[1].toDouble();
+        // 存储归一化坐标，验证并限制在 [0, 1] 范围内
+        double normX = arr[0].toDouble();
+        double normY = arr[1].toDouble();
+
+        // 验证并限制归一化坐标范围
+        normX = qBound(0.0, normX, 1.0);
+        normY = qBound(0.0, normY, 1.0);
+
+        point.normX = normX;
+        point.normY = normY;
         point.hasNormalized = true;
         // 根据当前图片尺寸计算像素坐标用于取色
         point.x = qRound(point.normX * qMax(1, imgWidth - 1));
@@ -1161,13 +1168,11 @@ bool MainWindow::saveJsonConfig(const QString& filePath)
     root["xyFormat"] = (xyFormat == CoordinateFormat::Normalized) ? "normalized" : "pixel";
     root["colorFormat"] = colorFormatToString(colorFormat);
 
-    // 保存图片和屏幕尺寸
+    // 保存图片尺寸
     if (!currentImage.isNull()) {
         root["imageWidth"] = currentImage.width();
         root["imageHeight"] = currentImage.height();
     }
-    root["screenWidth"] = ui->screenWidthSpin->value();
-    root["screenHeight"] = ui->screenHeightSpin->value();
 
     // 保存显示设置
     root["normalizedDecimals"] = normalizedDecimals;
@@ -1269,11 +1274,37 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
         // 读取点数据（根据存储的格式解析）
         if (root["points"].isArray()) {
             QJsonArray pointsArray = root["points"].toArray();
+
+            // 检查归一化坐标是否超出范围
+            bool hasInvalidCoords = false;
+            if (xyFormat == CoordinateFormat::Normalized) {
+                for (const QJsonValue& value : pointsArray) {
+                    if (value.isArray()) {
+                        QJsonArray ptArr = value.toArray();
+                        if (ptArr.size() >= 2) {
+                            double x = ptArr[0].toDouble();
+                            double y = ptArr[1].toDouble();
+                            if (x < 0.0 || x > 1.0 || y < 0.0 || y > 1.0) {
+                                hasInvalidCoords = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 加载检测点数据
             for (const QJsonValue& value : pointsArray) {
                 if (value.isArray()) {
                     detectionPoints.append(DetectionPoint::fromJson(
                         value.toArray(), xyFormat, colorFormat, currentImgWidth, currentImgHeight));
                 }
+            }
+
+            // 如果检测到无效坐标，显示警告
+            if (hasInvalidCoords) {
+                QMessageBox::warning(this, "警告",
+                    "配置文件中包含超出范围的归一化坐标，已自动修正到 [0, 1] 范围内");
             }
         }
     } else {
@@ -1309,14 +1340,6 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
         ui->configNameEdit->setText(root["configName"].toString());
     } else {
         ui->configNameEdit->setText("");
-    }
-
-    // Load screen dimensions (backward compatible - defaults if not present)
-    if (root.contains("screenWidth") && root["screenWidth"].isDouble()) {
-        ui->screenWidthSpin->setValue(root["screenWidth"].toInt());
-    }
-    if (root.contains("screenHeight") && root["screenHeight"].isDouble()) {
-        ui->screenHeightSpin->setValue(root["screenHeight"].toInt());
     }
 
     // Load display settings - decimal places (backward compatible - defaults if not present)
