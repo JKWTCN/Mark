@@ -661,7 +661,14 @@ void MainWindow::updateImageInfoDisplay()
 
         if (!currentImageFileName.isEmpty()) {
             QFileInfo fileInfo(currentImageFileName);
-            ui->imageFileNameValue->setText(fileInfo.fileName());
+            QString fileName = fileInfo.fileName();
+
+            // Elide long filenames (max 40 characters)
+            if (fileName.length() > 40) {
+                fileName = fileName.left(18) + "..." + fileName.right(19);
+            }
+
+            ui->imageFileNameValue->setText(fileName);
             ui->imageFileNameValue->setToolTip(currentImageFileName);
 
             if (currentImageFileSize > 0) {
