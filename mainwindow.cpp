@@ -12,6 +12,7 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QPixmap>
+#include <QPalette>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -34,10 +35,21 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     setAcceptDrops(true);
 
+    // Setup dark mode compatible palette for scrollArea and its contents
+    ui->scrollArea->setStyleSheet("");
+    ui->scrollAreaContents->setStyleSheet("");
+    ui->scrollArea->setAutoFillBackground(false);
+    ui->scrollAreaContents->setAutoFillBackground(false);
+
+    // Clear fixed background color from imageLabel to use system theme
+    ui->imageLabel->setStyleSheet("");
+
     setupConnections();
 
     ui->imageLabel->setMouseTracking(true);
     ui->imageLabel->installEventFilter(this);
+    ui->scrollArea->installEventFilter(this);  // 为 scrollArea 安装事件过滤器
+    ui->scrollArea->viewport()->installEventFilter(this);  // 为 viewport 安装事件过滤器
 
     // Remove the maximum height constraint from pointsGroup
     ui->pointsGroup->setMaximumSize(16777215, 16777215);
@@ -78,6 +90,110 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event)
+{
+    // 拦截 scrollArea 或 viewport 的滚轮事件
+    if ((obj == ui->scrollArea || obj == ui->scrollArea->viewport()) && event->type() == QEvent::Wheel) {
+        QWheelEvent *wheelEvent = static_cast<QWheelEvent*>(event);
+
+        // 检查是否有图片加载
+        if (currentImage.isNull()) {
+            return false;  // 让默认处理
+        }
+
+        // 获取滚轮滚动的角度
+        QPoint angleDelta = wheelEvent->angleDelta();
+        int delta = angleDelta.y();
+
+        // 如果没有滚动，使用默认行为
+        if (delta == 0) {
+            return false;
+        }
+
+        // 只有按住 Ctrl 键时才响应缩放
+        if (wheelEvent->modifiers() & Qt::ControlModifier) {
+            // 阻止事件继续传播，避免触发滚动条
+            wheelEvent->accept();
+
+            // 计算缩放步长（每次滚动缩放 0.1 倍）
+            double zoomStep = 0.1;
+
+            // 根据滚动方向确定是放大还是缩小
+            double newZoom;
+            if (delta > 0) {
+                newZoom = currentZoom + zoomStep;
+            } else {
+                newZoom = currentZoom - zoomStep;
+            }
+
+            // 限制缩放范围：0.1 到 6.0
+            newZoom = qBound(0.1, newZoom, 6.0);
+
+            // 如果缩放比例没有变化，直接返回
+            if (qFuzzyCompare(newZoom, currentZoom)) {
+                return true;
+            }
+
+            // ========== 以鼠标位置为中心缩放 ==========
+
+            // 1. 获取鼠标在 scrollArea 中的相对位置
+            QPoint mousePos = ui->scrollArea->mapFromGlobal(wheelEvent->globalPosition().toPoint());
+
+            // 2. 获取当前的滚动条位置
+            QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
+            QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
+            int oldHScroll = hBar->value();
+            int oldVScroll = vBar->value();
+
+            // 3. 计算鼠标在图片上的相对位置
+            QPixmap pixmap = ui->imageLabel->pixmap();
+            if (pixmap.isNull()) {
+                return false;
+            }
+
+            // 获取缩放后的图片尺寸
+            QSize scaledSize = pixmap.size();
+
+            // 计算 imageLabel 的边距（因为图片居中显示）
+            int offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
+            int offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
+
+            // 计算鼠标在图片上的位置（相对于图片左上角）
+            double mouseX = mousePos.x() + oldHScroll - offsetX;
+            double mouseY = mousePos.y() + oldVScroll - offsetY;
+
+            // 4. 计算新的缩放比例下的滚动条位置
+            double zoomRatio = newZoom / currentZoom;
+            int newHScroll = static_cast<int>(mouseX * (zoomRatio - 1) + oldHScroll);
+            int newVScroll = static_cast<int>(mouseY * (zoomRatio - 1) + oldVScroll);
+
+            // 5. 应用新的缩放比例
+            currentZoom = newZoom;
+
+            // 更新滑块和标签显示
+            ui->zoomSlider->blockSignals(true);
+            ui->zoomSlider->setValue(static_cast<int>(currentZoom * 100));
+            ui->zoomSlider->blockSignals(false);
+            ui->zoomLabel->setText(QString("缩放: %1%").arg(static_cast<int>(currentZoom * 100)));
+
+            // 6. 更新图片显示
+            updateImageDisplay();
+
+            // 7. 设置新的滚动条位置（必须在 updateImageDisplay 之后）
+            hBar->setValue(qBound(hBar->minimum(), newHScroll, hBar->maximum()));
+            vBar->setValue(qBound(vBar->minimum(), newVScroll, vBar->maximum()));
+
+            return true;  // 事件已处理，阻止默认行为
+        }
+
+        // 没有按 Ctrl 键，让默认处理（滚动条工作）
+        return false;
+    }
+
+    // 其他事件，让默认处理
+    return QMainWindow::eventFilter(obj, event);
 }
 
 QString MainWindow::rgbToHex(int r, int g, int b)
@@ -681,9 +797,9 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
             // This was a click, add detection point
             if (ui->imageLabel->underMouse()) {
                 QPoint labelPos = ui->imageLabel->mapFromGlobal(event->globalPos());
-                const QPixmap* pixmapPtr = ui->imageLabel->pixmap();
-                if (pixmapPtr && !pixmapPtr->isNull()) {
-                    QSize scaledSize = pixmapPtr->size();
+                QPixmap pixmap = ui->imageLabel->pixmap();
+                if (!pixmap.isNull()) {
+                    QSize scaledSize = pixmap.size();
                     QSize imageSize = currentImage.size();
 
                     double scaleX = (double)imageSize.width() / scaledSize.width();
@@ -708,99 +824,9 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
 
 void MainWindow::wheelEvent(QWheelEvent *event)
 {
-    // 检查是否有图片加载
-    if (currentImage.isNull()) {
-        QMainWindow::wheelEvent(event);
-        return;
-    }
-
-    // 检查鼠标是否在 scrollArea 上
-    if (!ui->scrollArea->underMouse()) {
-        QMainWindow::wheelEvent(event);
-        return;
-    }
-
-    // 获取滚轮滚动的角度
-    QPoint angleDelta = event->angleDelta();
-    int delta = angleDelta.y();
-
-    // 如果没有滚动，使用默认行为
-    if (delta == 0) {
-        QMainWindow::wheelEvent(event);
-        return;
-    }
-
-    // 计算缩放步长（每次滚动缩放 0.1 倍）
-    double zoomStep = 0.1;
-
-    // 根据滚动方向确定是放大还是缩小
-    double newZoom;
-    if (delta > 0) {
-        newZoom = currentZoom + zoomStep;
-    } else {
-        newZoom = currentZoom - zoomStep;
-    }
-
-    // 限制缩放范围：0.1 到 6.0
-    newZoom = qBound(0.1, newZoom, 6.0);
-
-    // 如果缩放比例没有变化，直接返回
-    if (qFuzzyCompare(newZoom, currentZoom)) {
-        return;
-    }
-
-    // ========== 以鼠标位置为中心缩放 ==========
-
-    // 1. 获取鼠标在 scrollArea 中的相对位置
-    QPoint mousePos = ui->scrollArea->mapFromGlobal(event->globalPosition().toPoint());
-
-    // 2. 获取当前的滚动条位置
-    QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
-    QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
-    int oldHScroll = hBar->value();
-    int oldVScroll = vBar->value();
-
-    // 3. 计算鼠标在图片上的相对位置
-    const QPixmap* pixmap = ui->imageLabel->pixmap();
-    if (!pixmap || pixmap->isNull()) {
-        QMainWindow::wheelEvent(event);
-        return;
-    }
-
-    // 获取缩放后的图片尺寸
-    QSize scaledSize = pixmap->size();
-
-    // 计算 imageLabel 的边距（因为图片居中显示）
-    int offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
-    int offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
-
-    // 计算鼠标在图片上的位置（相对于图片左上角）
-    double mouseX = mousePos.x() + oldHScroll - offsetX;
-    double mouseY = mousePos.y() + oldVScroll - offsetY;
-
-    // 4. 计算新的缩放比例下的滚动条位置
-    double zoomRatio = newZoom / currentZoom;
-    int newHScroll = static_cast<int>(mouseX * (zoomRatio - 1) + oldHScroll);
-    int newVScroll = static_cast<int>(mouseY * (zoomRatio - 1) + oldVScroll);
-
-    // 5. 应用新的缩放比例
-    currentZoom = newZoom;
-
-    // 更新滑块和标签显示
-    ui->zoomSlider->blockSignals(true);
-    ui->zoomSlider->setValue(static_cast<int>(currentZoom * 100));
-    ui->zoomSlider->blockSignals(false);
-    ui->zoomLabel->setText(QString("缩放: %1%").arg(static_cast<int>(currentZoom * 100)));
-
-    // 6. 更新图片显示
-    updateImageDisplay();
-
-    // 7. 设置新的滚动条位置（必须在 updateImageDisplay 之后）
-    hBar->setValue(qBound(hBar->minimum(), newHScroll, hBar->maximum()));
-    vBar->setValue(qBound(vBar->minimum(), newVScroll, vBar->maximum()));
-
-    // 事件已处理
-    event->accept();
+    // 滚轮事件已在 eventFilter 中处理
+    // 这里只处理不在 scrollArea 上的情况
+    QMainWindow::wheelEvent(event);
 }
 
 void MainWindow::addDetectionPoint(const QPoint& pos)
