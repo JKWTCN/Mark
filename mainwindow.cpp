@@ -621,11 +621,10 @@ void MainWindow::loadImage()
 
             ui->imageLabel->setText("");
             // 保持当前缩放比例，不调用 fitToScreen()
-            updateImageDisplay();
-            updateImageInfoDisplay();
-
-            // 更新所有检测点的RGB值
+            // 先更新所有检测点的RGB值和坐标
             updatePointsRGBFromImage();
+            updateImageInfoDisplay();
+            updateImageDisplay();
 
             // 恢复滚动条位置（尽量恢复）
             hBar->setValue(qMin(oldHScroll, hBar->maximum()));
@@ -1837,10 +1836,10 @@ void MainWindow::loadImageAtIndex(int index)
         currentImageFileSize = fileInfo.size();
 
         ui->imageLabel->setText("");
-        updateImageDisplay();
-        updateImageInfoDisplay();
         updatePointsRGBFromImage();
+        updateImageInfoDisplay();
         updateImageCounterDisplay();
+        updateImageDisplay();
 
         // 恢复滚动条位置
         hBar->setValue(qMin(oldHScroll, hBar->maximum()));
