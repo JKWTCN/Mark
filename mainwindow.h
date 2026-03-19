@@ -97,6 +97,8 @@ private slots:
     void onDeletePointClicked();
     void onEditPointClicked();
     void onCopyPointClicked();
+    void onCopyCoordClicked();
+    void onCopyColorClicked();
     void loadFolder();
     void previousImage();
     void nextImage();

@@ -709,6 +709,8 @@ void MainWindow::setupConnections()
     connect(ui->addPointManuallyBtn, &QPushButton::clicked, this, &MainWindow::onAddPointManuallyClicked);
     connect(ui->deletePointBtn, &QPushButton::clicked, this, &MainWindow::onDeletePointClicked);
     connect(ui->editPointBtn, &QPushButton::clicked, this, &MainWindow::onEditPointClicked);
+    connect(ui->copyCoordBtn, &QPushButton::clicked, this, &MainWindow::onCopyCoordClicked);
+    connect(ui->copyColorBtn, &QPushButton::clicked, this, &MainWindow::onCopyColorClicked);
     connect(ui->copyPointBtn, &QPushButton::clicked, this, &MainWindow::onCopyPointClicked);
     connect(ui->loadFolderBtn, &QPushButton::clicked, this, &MainWindow::loadFolder);
     connect(ui->prevImageBtn, &QPushButton::clicked, this, &MainWindow::previousImage);
@@ -1778,6 +1780,86 @@ void MainWindow::onCopyPointClicked()
 
     // 显示成功提示
     QMessageBox::information(this, "成功", QString("已复制到剪贴板:\n%1").arg(copyText));
+}
+
+void MainWindow::onCopyCoordClicked()
+{
+    // 1. 获取并验证选中项（复用现有逻辑）
+    QListWidgetItem* item = ui->pointsList->currentItem();
+    if (!item) {
+        QMessageBox::warning(this, "提示", "请先选择要复制的检测点");
+        return;
+    }
+
+    int index = ui->pointsList->row(item);
+    if (index < 0 || index >= detectionPoints.size()) {
+        QMessageBox::warning(this, "错误", "检测点索引无效");
+        return;
+    }
+
+    const DetectionPoint& point = detectionPoints[index];
+
+    // 2. 获取当前坐标格式
+    CoordinateFormat coordFormat = getCurrentCoordinateFormat();
+
+    // 3. 检查归一化坐标是否需要图片
+    if (coordFormat == CoordinateFormat::Normalized && currentImage.isNull()) {
+        QMessageBox::warning(this, "错误", "请先加载图片");
+        return;
+    }
+
+    // 4. 生成格式化的坐标字符串
+    QString coordText;
+    if (coordFormat == CoordinateFormat::Normalized) {
+        double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
+        double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
+        coordText = QString("%1, %2")
+            .arg(normX, 0, 'f', normalizedDecimals)
+            .arg(normY, 0, 'f', normalizedDecimals);
+    } else {
+        coordText = QString("%1, %2").arg(point.x).arg(point.y);
+    }
+
+    // 5. 复制到剪贴板
+    QClipboard* clipboard = QGuiApplication::clipboard();
+    clipboard->setText(coordText);
+
+    // 6. 显示成功提示
+    QString formatDesc = (coordFormat == CoordinateFormat::Normalized) ? "归一化坐标" : "像素坐标";
+    QMessageBox::information(this, "成功",
+        QString("已复制%1到剪贴板:\n%2").arg(formatDesc).arg(coordText));
+}
+
+void MainWindow::onCopyColorClicked()
+{
+    // 1. 获取并验证选中项（复用现有逻辑）
+    QListWidgetItem* item = ui->pointsList->currentItem();
+    if (!item) {
+        QMessageBox::warning(this, "提示", "请先选择要复制的检测点");
+        return;
+    }
+
+    int index = ui->pointsList->row(item);
+    if (index < 0 || index >= detectionPoints.size()) {
+        QMessageBox::warning(this, "错误", "检测点索引无效");
+        return;
+    }
+
+    const DetectionPoint& point = detectionPoints[index];
+
+    // 2. 获取当前颜色格式
+    ColorFormat colorFormat = getCurrentColorFormat();
+
+    // 3. 使用现有的颜色格式化函数
+    QString colorText = formatColorToString(point.r, point.g, point.b, colorFormat);
+
+    // 4. 复制到剪贴板
+    QClipboard* clipboard = QGuiApplication::clipboard();
+    clipboard->setText(colorText);
+
+    // 5. 显示成功提示
+    QMessageBox::information(this, "成功",
+        QString("已复制颜色到剪贴板:\n%1").arg(colorText));
 }
 
 void MainWindow::loadFolder()
