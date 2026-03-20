@@ -433,18 +433,16 @@ QJsonArray DetectionPoint::toJson(CoordinateFormat xyFormat, ColorFormat colorFo
 
     // 根据坐标格式添加坐标
     if (xyFormat == CoordinateFormat::Normalized) {
-        // 使用存储的归一化坐标，如果不存在则从像素坐标计算
-        double finalNormX, finalNormY;
-        if (hasNormalized) {
-            finalNormX = normX;
-            finalNormY = normY;
-        } else {
-            finalNormX = double(x) / qMax(1, imgWidth - 1);
-            finalNormY = double(y) / qMax(1, imgHeight - 1);
-        }
-        arr.append(QString::number(finalNormX, 'f', normDecimals).toDouble());
-        arr.append(QString::number(finalNormY, 'f', normDecimals).toDouble());
+        // 保存归一化坐标（即使主坐标是像素，也动态计算）
+        double normX = isNormalizedPrimary() ? this->normX :
+                       double(x) / qMax(1, imgWidth - 1);
+        double normY = isNormalizedPrimary() ? this->normY :
+                       double(y) / qMax(1, imgHeight - 1);
+
+        arr.append(QString::number(normX, 'f', normDecimals).toDouble());
+        arr.append(QString::number(normY, 'f', normDecimals).toDouble());
     } else {
+        // 保存像素坐标（即使主坐标是归一化，也使用缓存的像素坐标）
         arr.append(x);
         arr.append(y);
     }
@@ -518,7 +516,7 @@ DetectionPoint DetectionPoint::fromJson(const QJsonArray& arr,
 
     // 根据坐标格式解析坐标
     if (xyFormat == CoordinateFormat::Normalized) {
-        // 存储归一化坐标，验证并限制在 [0, 1] 范围内
+        // 从JSON加载归一化坐标 → 作为主坐标
         double normX = arr[0].toDouble();
         double normY = arr[1].toDouble();
 
@@ -528,19 +526,23 @@ DetectionPoint DetectionPoint::fromJson(const QJsonArray& arr,
 
         point.normX = normX;
         point.normY = normY;
-        point.hasNormalized = true;
-        // 根据当前图片尺寸计算像素坐标用于取色
+        point.primaryCoord = PrimaryNormalized;  // 标记为主坐标
+
+        // 缓存像素坐标（用于取色）
         point.x = qRound(point.normX * qMax(1, imgWidth - 1));
         point.y = qRound(point.normY * qMax(1, imgHeight - 1));
     } else {
-        // 像素格式：读取像素坐标，并计算归一化坐标以便在不同尺寸图片间保持相对位置
+        // 从JSON加载像素坐标 → 作为主坐标
         point.x = arr[0].toInt();
         point.y = arr[1].toInt();
-        // 计算归一化坐标
+        point.primaryCoord = PrimaryPixel;  // 标记为主坐标
+
+        // 计算归一化坐标（缓存）
         point.normX = double(point.x) / qMax(1, imgWidth - 1);
         point.normY = double(point.y) / qMax(1, imgHeight - 1);
-        point.hasNormalized = true;
     }
+
+    point.hasNormalized = true;
 
     // 根据颜色格式解析颜色
     switch (colorFormat) {
@@ -838,20 +840,37 @@ void MainWindow::wheelEvent(QWheelEvent *event)
 void MainWindow::addDetectionPoint(const QPoint& pos)
 {
     QColor color = getPixelColor(pos);
+    DetectionPoint point;
 
-    // 计算归一化坐标
-    double normX = 0.0, normY = 0.0;
-    bool hasNorm = false;
-    if (!currentImage.isNull()) {
-        normX = double(pos.x()) / qMax(1, currentImage.width() - 1);
-        normY = double(pos.y()) / qMax(1, currentImage.height() - 1);
-        hasNorm = true;
+    CoordinateFormat coordFormat = getCurrentCoordinateFormat();
+
+    if (coordFormat == CoordinateFormat::Normalized) {
+        // 归一化模式：归一化坐标为主
+        point.normX = double(pos.x()) / qMax(1, currentImage.width() - 1);
+        point.normY = double(pos.y()) / qMax(1, currentImage.height() - 1);
+        point.primaryCoord = DetectionPoint::PrimaryNormalized;
+
+        // 缓存像素坐标（用于取色）
+        point.x = pos.x();
+        point.y = pos.y();
+    } else {
+        // 像素模式：像素坐标为主
+        point.x = pos.x();
+        point.y = pos.y();
+        point.primaryCoord = DetectionPoint::PrimaryPixel;
+
+        // 计算归一化坐标（缓存）
+        if (!currentImage.isNull()) {
+            point.normX = double(point.x) / qMax(1, currentImage.width() - 1);
+            point.normY = double(point.y) / qMax(1, currentImage.height() - 1);
+        }
     }
 
-    DetectionPoint point(pos.x(), pos.y(), color.red(), color.green(), color.blue(), normX, normY);
-    if (!hasNorm) {
-        point.hasNormalized = false;
-    }
+    point.r = color.red();
+    point.g = color.green();
+    point.b = color.blue();
+    point.hasNormalized = true;  // 总是标记为有归一化坐标
+
     detectionPoints.append(point);
     updatePointsList();
     drawDetectionPoints();
@@ -923,21 +942,24 @@ void MainWindow::updatePointsList()
         QString colorText = formatColorToString(point.r, point.g, point.b, colorFormat);
         QString coordText;
         if (coordFormat == CoordinateFormat::Normalized) {
-            // 直接显示存储的归一化坐标
-            if (point.hasNormalized) {
-                coordText = QString("(%1, %2)")
-                    .arg(QString::number(point.normX, 'f', normalizedDecimals))
-                    .arg(QString::number(point.normY, 'f', normalizedDecimals));
+            double normX, normY;
+
+            if (point.isNormalizedPrimary()) {
+                // 使用主坐标（归一化）
+                normX = point.normX;
+                normY = point.normY;
             } else if (!currentImage.isNull()) {
-                // 如果没有存储归一化坐标，从像素坐标计算
-                double normX = double(point.x) / qMax(1, currentImage.width() - 1);
-                double normY = double(point.y) / qMax(1, currentImage.height() - 1);
-                coordText = QString("(%1, %2)")
-                    .arg(QString::number(normX, 'f', normalizedDecimals))
-                    .arg(QString::number(normY, 'f', normalizedDecimals));
+                // 像素坐标为主，动态计算
+                normX = double(point.x) / qMax(1, currentImage.width() - 1);
+                normY = double(point.y) / qMax(1, currentImage.height() - 1);
             } else {
                 coordText = "(?, ?)";
+                break;
             }
+
+            coordText = QString("(%1, %2)")
+                .arg(QString::number(normX, 'f', normalizedDecimals))
+                .arg(QString::number(normY, 'f', normalizedDecimals));
         } else {
             // 像素坐标模式：检查是否超出图片范围
             if (!currentImage.isNull() &&
@@ -989,8 +1011,9 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             xSpinBox->setRange(0.0, 1.0);
             xSpinBox->setDecimals(normalizedDecimals);
             xSpinBox->setSingleStep(qPow(10, -normalizedDecimals));
-            // 使用存储的归一化坐标，如果不存在则从像素坐标计算
-            double normX = point.hasNormalized ? point.normX : double(point.x) / qMax(1, currentImage.width() - 1);
+            // 优先使用主坐标
+            double normX = point.isNormalizedPrimary() ? point.normX :
+                          double(point.x) / qMax(1, currentImage.width() - 1);
             xSpinBox->setValue(normX);
             layout->addRow("X坐标 (归一化):", xSpinBox);
             xInputWidget = xSpinBox;
@@ -999,7 +1022,8 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             ySpinBox->setRange(0.0, 1.0);
             ySpinBox->setDecimals(normalizedDecimals);
             ySpinBox->setSingleStep(qPow(10, -normalizedDecimals));
-            double normY = point.hasNormalized ? point.normY : double(point.y) / qMax(1, currentImage.height() - 1);
+            double normY = point.isNormalizedPrimary() ? point.normY :
+                          double(point.y) / qMax(1, currentImage.height() - 1);
             ySpinBox->setValue(normY);
             layout->addRow("Y坐标 (归一化):", ySpinBox);
             yInputWidget = ySpinBox;
@@ -1069,10 +1093,10 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
                 newX = qRound(normX * qMax(1, currentImage.width() - 1));
                 newY = qRound(normY * qMax(1, currentImage.height() - 1));
 
-                // 更新归一化坐标
+                // 更新归一化坐标并设为主坐标
                 point.normX = normX;
                 point.normY = normY;
-                point.hasNormalized = true;
+                point.primaryCoord = DetectionPoint::PrimaryNormalized;
             } else {
                 QSpinBox* xSpin = static_cast<QSpinBox*>(xInputWidget);
                 QSpinBox* ySpin = static_cast<QSpinBox*>(yInputWidget);
@@ -1080,8 +1104,8 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
                 newX = xSpin->value();
                 newY = ySpin->value();
 
-                // 像素坐标编辑：清除归一化坐标标记，将根据当前图片尺寸重新计算
-                point.hasNormalized = false;
+                // 更新像素坐标并设为主坐标
+                point.primaryCoord = DetectionPoint::PrimaryPixel;
             }
 
             // 从图片获取新坐标的RGB颜色
@@ -1094,12 +1118,13 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             point.g = newColor.green();
             point.b = newColor.blue();
 
-            // 如果在像素坐标模式下编辑，重新计算归一化坐标
+            // 如果在像素坐标模式下编辑，重新计算归一化坐标缓存
             if (coordFormat != CoordinateFormat::Normalized && !currentImage.isNull()) {
                 point.normX = double(point.x) / qMax(1, currentImage.width() - 1);
                 point.normY = double(point.y) / qMax(1, currentImage.height() - 1);
-                point.hasNormalized = true;
             }
+
+            point.hasNormalized = true;
 
             updatePointsList();
             drawDetectionPoints();
@@ -1559,9 +1584,35 @@ void MainWindow::onAddPointManuallyClicked()
             return;
         }
 
-        // 添加检测点（只存储像素坐标）
+        // 添加检测点
         QColor color = getPixelColor(QPoint(x, y));
-        DetectionPoint point(x, y, color.red(), color.green(), color.blue());
+        DetectionPoint point;
+
+        if (coordFormat == CoordinateFormat::Normalized) {
+            // 归一化模式：归一化坐标为主
+            point.normX = double(x) / qMax(1, currentImage.width() - 1);
+            point.normY = double(y) / qMax(1, currentImage.height() - 1);
+            point.primaryCoord = DetectionPoint::PrimaryNormalized;
+
+            // 缓存像素坐标（用于取色）
+            point.x = x;
+            point.y = y;
+        } else {
+            // 像素模式：像素坐标为主
+            point.x = x;
+            point.y = y;
+            point.primaryCoord = DetectionPoint::PrimaryPixel;
+
+            // 计算归一化坐标（缓存）
+            point.normX = double(point.x) / qMax(1, currentImage.width() - 1);
+            point.normY = double(point.y) / qMax(1, currentImage.height() - 1);
+        }
+
+        point.r = color.red();
+        point.g = color.green();
+        point.b = color.blue();
+        point.hasNormalized = true;
+
         detectionPoints.append(point);
         updatePointsList();
         drawDetectionPoints();
@@ -1680,8 +1731,19 @@ void MainWindow::onCopyPointClicked()
             QMessageBox::warning(this, "错误", "请先加载图片");
             return;
         }
-        double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
-        double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
+
+        // 关键修改：优先使用主坐标
+        double normX, normY;
+        if (point.isNormalizedPrimary()) {
+            // 使用存储的归一化坐标（主坐标）
+            normX = point.normX;
+            normY = point.normY;
+        } else {
+            // 像素坐标为主，动态计算归一化坐标
+            normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
+            normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
+        }
+
         coordPart = QString("%1,%2").arg(normX, 0, 'f', normalizedDecimals).arg(normY, 0, 'f', normalizedDecimals);
     } else {
         coordPart = QString("%1,%2").arg(point.x).arg(point.y);
@@ -1808,8 +1870,18 @@ void MainWindow::onCopyCoordClicked()
     // 4. 生成格式化的坐标字符串
     QString coordText;
     if (coordFormat == CoordinateFormat::Normalized) {
-        double normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
-        double normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
+        // 关键修改：优先使用主坐标
+        double normX, normY;
+        if (point.isNormalizedPrimary()) {
+            // 使用存储的归一化坐标（主坐标）
+            normX = point.normX;
+            normY = point.normY;
+        } else {
+            // 像素坐标为主，动态计算归一化坐标
+            normX = static_cast<double>(point.x) / qMax(1, currentImage.width() - 1);
+            normY = static_cast<double>(point.y) / qMax(1, currentImage.height() - 1);
+        }
+
         coordText = QString("%1, %2")
             .arg(normX, 0, 'f', normalizedDecimals)
             .arg(normY, 0, 'f', normalizedDecimals);
@@ -2065,4 +2137,22 @@ void MainWindow::animatedZoomTo(double targetZoom, const QPoint& centerPos)
     });
 
     zoomAnimation->start(QPropertyAnimation::KeepWhenStopped);
+}
+
+// DetectionPoint helper methods implementation
+
+void DetectionPoint::ensurePixelCoords(const QSize& imgSize)
+{
+    if (x == 0 && y == 0 && !isPixelPrimary()) {
+        x = qRound(normX * qMax(1, imgSize.width() - 1));
+        y = qRound(normY * qMax(1, imgSize.height() - 1));
+    }
+}
+
+void DetectionPoint::ensureNormalizedCoords(const QSize& imgSize)
+{
+    if (normX == 0.0 && normY == 0.0 && !isNormalizedPrimary()) {
+        normX = double(x) / qMax(1, imgSize.width() - 1);
+        normY = double(y) / qMax(1, imgSize.height() - 1);
+    }
 }

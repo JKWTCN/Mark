@@ -43,16 +43,23 @@ struct DetectionPoint {
     double normY;   // 归一化坐标 y (0.0-1.0)
     bool hasNormalized; // 标记是否包含归一化坐标
 
+    // 主坐标类型枚举
+    enum PrimaryCoordinate {
+        PrimaryPixel,      // 像素坐标为主
+        PrimaryNormalized  // 归一化坐标为主
+    };
+    PrimaryCoordinate primaryCoord;  // 主坐标类型
+
     // 默认构造函数
-    DetectionPoint() : x(0), y(0), r(0), g(0), b(0), normX(0.0), normY(0.0), hasNormalized(false) {}
+    DetectionPoint() : x(0), y(0), r(0), g(0), b(0), normX(0.0), normY(0.0), hasNormalized(false), primaryCoord(PrimaryPixel) {}
 
     // 带参数的构造函数（像素坐标）
     DetectionPoint(int x, int y, int r, int g, int b)
-        : x(x), y(y), r(r), g(g), b(b), normX(0.0), normY(0.0), hasNormalized(false) {}
+        : x(x), y(y), r(r), g(g), b(b), normX(0.0), normY(0.0), hasNormalized(false), primaryCoord(PrimaryPixel) {}
 
     // 带参数的构造函数（像素坐标 + 归一化坐标）
     DetectionPoint(int x, int y, int r, int g, int b, double normX, double normY)
-        : x(x), y(y), r(r), g(g), b(b), normX(normX), normY(normY), hasNormalized(true) {}
+        : x(x), y(y), r(r), g(g), b(b), normX(normX), normY(normY), hasNormalized(true), primaryCoord(PrimaryPixel) {}
 
     // toJson: 根据格式设置导出为对应格式
     QJsonArray toJson(CoordinateFormat xyFormat, ColorFormat colorFormat,
@@ -65,6 +72,12 @@ struct DetectionPoint {
 
     // fromJsonLegacy: 向后兼容旧格式（没有格式信息的 JSON）
     static DetectionPoint fromJsonLegacy(const QJsonArray& arr);
+
+    // 辅助方法
+    void ensurePixelCoords(const QSize& imgSize);
+    void ensureNormalizedCoords(const QSize& imgSize);
+    bool isPixelPrimary() const { return primaryCoord == PrimaryPixel; }
+    bool isNormalizedPrimary() const { return primaryCoord == PrimaryNormalized; }
 };
 
 class MainWindow : public QMainWindow
