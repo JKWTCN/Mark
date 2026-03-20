@@ -27,6 +27,8 @@
 #include <QtMath>
 #include <QDir>
 #include <algorithm>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -72,6 +74,9 @@ MainWindow::MainWindow(QWidget *parent)
     // Initialize coordinate format state
     currentCoordinateFormat = 0;  // Start with pixel format
 
+    // Setup smooth zoom animation
+    setupZoomAnimation();
+
     // Connect display settings signals
     connect(ui->normalizedDecimalsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
         normalizedDecimals = value;
@@ -89,6 +94,10 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    if (zoomAnimation) {
+        delete zoomAnimation;
+        zoomAnimation = nullptr;
+    }
     delete ui;
 }
 
@@ -123,69 +132,52 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             // 根据滚动方向确定是放大还是缩小
             double newZoom;
             if (delta > 0) {
-                newZoom = currentZoom + zoomStep;
+                newZoom = m_currentZoom + zoomStep;
             } else {
-                newZoom = currentZoom - zoomStep;
+                newZoom = m_currentZoom - zoomStep;
             }
 
             // 限制缩放范围：0.1 到 6.0
             newZoom = qBound(0.1, newZoom, 6.0);
 
             // 如果缩放比例没有变化，直接返回
-            if (qFuzzyCompare(newZoom, currentZoom)) {
+            if (qFuzzyCompare(newZoom, m_currentZoom)) {
                 return true;
             }
 
             // ========== 以鼠标位置为中心缩放 ==========
 
-            // 1. 获取鼠标在 scrollArea 中的相对位置
+            // 1. 保存旧的缩放比例
+            double oldZoom = m_currentZoom;
+
+            // 2. 获取鼠标在 scrollArea 中的相对位置
             QPoint mousePos = ui->scrollArea->mapFromGlobal(wheelEvent->globalPosition().toPoint());
 
-            // 2. 获取当前的滚动条位置
+            // 3. 获取当前的滚动条位置
             QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
             QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
             int oldHScroll = hBar->value();
             int oldVScroll = vBar->value();
 
-            // 3. 计算鼠标在图片上的相对位置
+            // 4. 获取当前显示的图片（缩放后的）
             QPixmap pixmap = ui->imageLabel->pixmap();
             if (pixmap.isNull()) {
                 return false;
             }
 
-            // 获取缩放后的图片尺寸
+            // 5. 计算鼠标在原图上的位置（归一化坐标，不随缩放改变）
+            //    这样可以在缩放后保持鼠标指向的图片内容不变
             QSize scaledSize = pixmap.size();
-
-            // 计算 imageLabel 的边距（因为图片居中显示）
             int offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
             int offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
 
-            // 计算鼠标在图片上的位置（相对于图片左上角）
-            double mouseX = mousePos.x() + oldHScroll - offsetX;
-            double mouseY = mousePos.y() + oldVScroll - offsetY;
+            // 计算鼠标在原图上的坐标（相对于图片左上角，单位：原图像素）
+            double imageX = (mousePos.x() + oldHScroll - offsetX) / oldZoom;
+            double imageY = (mousePos.y() + oldVScroll - offsetY) / oldZoom;
 
-            // 4. 计算新的缩放比例下的滚动条位置
-            double zoomRatio = newZoom / currentZoom;
-            int newHScroll = static_cast<int>(mouseX * (zoomRatio - 1) + oldHScroll);
-            int newVScroll = static_cast<int>(mouseY * (zoomRatio - 1) + oldVScroll);
-
-            // 5. 应用新的缩放比例
-            currentZoom = newZoom;
-
-            // 更新滑块和标签显示
-            ui->zoomSlider->blockSignals(true);
-            ui->zoomSlider->setValue(static_cast<int>(currentZoom * 100));
-            ui->zoomSlider->blockSignals(false);
-            ui->zoomLabel->setText(QString("缩放: %1%").arg(static_cast<int>(currentZoom * 100)));
-
-            // 6. 更新图片显示
-            updateImageDisplay();
-
-            // 7. 设置新的滚动条位置（必须在 updateImageDisplay 之后）
-            hBar->setValue(qBound(hBar->minimum(), newHScroll, hBar->maximum()));
-            vBar->setValue(qBound(vBar->minimum(), newVScroll, vBar->maximum()));
-
-            return true;  // 事件已处理，阻止默认行为
+            // 6. 使用平滑动画应用新的缩放比例
+            animatedZoomTo(newZoom, wheelEvent->globalPosition().toPoint());
+            return true;
         }
 
         // 没有按 Ctrl 键，让默认处理（滚动条工作）
@@ -719,6 +711,11 @@ void MainWindow::setupConnections()
 
 void MainWindow::loadImage()
 {
+    // Stop any running animation when switching images
+    if (zoomAnimation && zoomAnimation->state() == QPropertyAnimation::Running) {
+        zoomAnimation->stop();
+    }
+
     QString fileName = QFileDialog::getOpenFileName(this, "选择图片", "",
         "Images (*.png *.jpg *.jpeg *.bmp *.webp)");
 
@@ -894,7 +891,7 @@ void MainWindow::updateImageDisplay()
     }
 
     QPixmap pixmap = QPixmap::fromImage(displayImage);
-    QSize scaledSize = pixmap.size() * currentZoom;
+    QSize scaledSize = pixmap.size() * m_currentZoom;
     QPixmap scaledPixmap = pixmap.scaled(scaledSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     ui->imageLabel->setPixmap(scaledPixmap);
     ui->imageLabel->setAlignment(Qt::AlignCenter);
@@ -1134,6 +1131,11 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 
 void MainWindow::dropEvent(QDropEvent *event)
 {
+    // Stop any running animation when switching images
+    if (zoomAnimation && zoomAnimation->state() == QPropertyAnimation::Running) {
+        zoomAnimation->stop();
+    }
+
     const QMimeData* mimeData = event->mimeData();
     if (mimeData->hasUrls()) {
         QList<QUrl> urls = mimeData->urls();
@@ -1431,27 +1433,22 @@ void MainWindow::loadConfig()
 
 void MainWindow::setZoom(double zoom)
 {
-    currentZoom = qBound(0.1, zoom, 6.0);
-    ui->zoomSlider->blockSignals(true);
-    ui->zoomSlider->setValue(static_cast<int>(currentZoom * 100));
-    ui->zoomSlider->blockSignals(false);
-    ui->zoomLabel->setText(QString("缩放: %1%").arg(static_cast<int>(currentZoom * 100)));
-    updateImageDisplay();
+    animatedZoomTo(zoom);
 }
 
 void MainWindow::zoomIn()
 {
-    setZoom(currentZoom + 0.1);
+    setZoom(m_currentZoom + 0.1);
 }
 
 void MainWindow::zoomOut()
 {
-    setZoom(currentZoom - 0.1);
+    setZoom(m_currentZoom - 0.1);
 }
 
 void MainWindow::zoomChanged(int value)
 {
-    currentZoom = value / 100.0;
+    m_currentZoom = value / 100.0;
     ui->zoomLabel->setText(QString("缩放: %1%").arg(value));
     updateImageDisplay();
 }
@@ -1467,7 +1464,7 @@ void MainWindow::fitToScreen()
     double scaleY = (double)scrollSize.height() / imageSize.height();
     double fitZoom = qMin(scaleX, scaleY);
 
-    setZoom(fitZoom);
+    animatedZoomTo(fitZoom);
 }
 
 void MainWindow::actualSize()
@@ -1933,6 +1930,11 @@ void MainWindow::loadImageAtIndex(int index)
         return;
     }
 
+    // Stop any running animation when switching images
+    if (zoomAnimation && zoomAnimation->state() == QPropertyAnimation::Running) {
+        zoomAnimation->stop();
+    }
+
     QString fileName = imageFileList[index];
 
     // 保存当前的滚动条位置和缩放比例
@@ -1983,4 +1985,84 @@ void MainWindow::updateImageCounterDisplay()
             QString("%1/%2").arg(currentImageIndex + 1).arg(imageFileList.size())
         );
     }
+}
+
+void MainWindow::setupZoomAnimation()
+{
+    zoomAnimation = new QPropertyAnimation(this, "currentZoom");
+    zoomAnimation->setDuration(200);  // 200ms动画时长
+    zoomAnimation->setEasingCurve(QEasingCurve::OutCubic);  // 自然减速效果
+}
+
+void MainWindow::setCurrentZoom(double zoom)
+{
+    if (qFuzzyCompare(m_currentZoom, zoom)) return;
+
+    m_currentZoom = qBound(0.1, zoom, 6.0);
+
+    // 更新UI显示
+    ui->zoomSlider->blockSignals(true);
+    ui->zoomSlider->setValue(static_cast<int>(m_currentZoom * 100));
+    ui->zoomSlider->blockSignals(false);
+    ui->zoomLabel->setText(QString("缩放: %1%").arg(static_cast<int>(m_currentZoom * 100)));
+
+    updateImageDisplay();
+    emit currentZoomChanged(m_currentZoom);
+}
+
+void MainWindow::animatedZoomTo(double targetZoom, const QPoint& centerPos)
+{
+    targetZoom = qBound(0.1, targetZoom, 6.0);
+
+    // 极小差值直接设置
+    if (qAbs(targetZoom - m_currentZoom) < 0.01) {
+        setCurrentZoom(targetZoom);
+        return;
+    }
+
+    // 如果动画正在运行，停止旧动画
+    if (zoomAnimation->state() == QPropertyAnimation::Running) {
+        zoomAnimation->stop();
+    }
+
+    // 保存缩放中心点（用于动画过程中调整滚动条）
+    QPoint center = centerPos.isNull() ?
+        ui->scrollArea->viewport()->mapToGlobal(ui->scrollArea->viewport()->rect().center())
+        : centerPos;
+
+    QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
+    QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
+
+    // 计算中心点在原图上的归一化坐标
+    QPoint mousePos = ui->scrollArea->mapFromGlobal(center);
+    QPixmap pixmap = ui->imageLabel->pixmap();
+    QSize scaledSize = pixmap.size();
+    int offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
+    int offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
+
+    double imageX = (mousePos.x() + hBar->value() - offsetX) / m_currentZoom;
+    double imageY = (mousePos.y() + vBar->value() - offsetY) / m_currentZoom;
+
+    // 配置动画
+    zoomAnimation->setStartValue(m_currentZoom);
+    zoomAnimation->setEndValue(targetZoom);
+
+    // 动画过程中调整滚动条保持中心点
+    disconnect(zoomAnimation, &QPropertyAnimation::valueChanged, nullptr, nullptr);
+    connect(zoomAnimation, &QPropertyAnimation::valueChanged, [=](const QVariant& value) {
+        double newZoom = value.toDouble();
+
+        // 计算新的滚动条位置
+        QSize newScaledSize = ui->imageLabel->pixmap().size();
+        int newOffsetX = (ui->imageLabel->width() - newScaledSize.width()) / 2;
+        int newOffsetY = (ui->imageLabel->height() - newScaledSize.height()) / 2;
+
+        int newHScroll = static_cast<int>(imageX * newZoom + newOffsetX - mousePos.x());
+        int newVScroll = static_cast<int>(imageY * newZoom + newOffsetY - mousePos.y());
+
+        hBar->setValue(qBound(hBar->minimum(), newHScroll, hBar->maximum()));
+        vBar->setValue(qBound(vBar->minimum(), newVScroll, vBar->maximum()));
+    });
+
+    zoomAnimation->start(QPropertyAnimation::KeepWhenStopped);
 }

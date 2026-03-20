@@ -18,6 +18,10 @@ class MainWindow;
 }
 QT_END_NAMESPACE
 
+// Forward declarations
+class QPropertyAnimation;
+class QPoint;
+
 enum class ColorFormat {
     RGB,
     HEX,
@@ -67,9 +71,15 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
+    // Property for smooth zoom animation
+    Q_PROPERTY(double currentZoom READ currentZoom WRITE setCurrentZoom NOTIFY currentZoomChanged)
+
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+    // Getter for currentZoom property (used by QPropertyAnimation)
+    double currentZoom() const { return m_currentZoom; }
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
@@ -103,11 +113,14 @@ private slots:
     void previousImage();
     void nextImage();
 
+signals:
+    void currentZoomChanged(double newZoom);
+
 private:
     Ui::MainWindow *ui;
     QImage currentImage;
     QList<DetectionPoint> detectionPoints;
-    double currentZoom = 1.0;
+    double m_currentZoom = 1.0;  // Member variable for zoom level
 
     // Image file information
     QString currentImageFileName;
@@ -183,5 +196,11 @@ private:
     void loadImageAtIndex(int index);
     void updateNavigationButtons();
     void updateImageCounterDisplay();
+
+    // Smooth zoom animation
+    QPropertyAnimation* zoomAnimation = nullptr;
+    void setCurrentZoom(double zoom);
+    void animatedZoomTo(double targetZoom, const QPoint& centerPos = QPoint());
+    void setupZoomAnimation();
 };
 #endif // MAINWINDOW_H
