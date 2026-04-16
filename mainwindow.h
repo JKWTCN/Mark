@@ -125,6 +125,8 @@ private slots:
     void loadFolder();
     void previousImage();
     void nextImage();
+    void onOpenInExplorerClicked();
+    void onCopyImageClicked();
 
 signals:
     void currentZoomChanged(double newZoom);
@@ -197,6 +199,7 @@ private:
     int normalizedDecimals = 6;
     int colorDecimals = 0;
     int fileSizeDecimals = 2;
+    int pointsListVisibleRows = 5;  // 检测点列表可见行数
 
     // Coordinate conversion functions
     QString pixelToNormalizedString(int pixel, int maxValue);
@@ -215,5 +218,6 @@ private:
     void setCurrentZoom(double zoom);
     void animatedZoomTo(double targetZoom, const QPoint& centerPos = QPoint());
     void setupZoomAnimation();
+    void updatePointsListHeight();
 };
 #endif // MAINWINDOW_H

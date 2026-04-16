@@ -29,6 +29,9 @@
 #include <algorithm>
 #include <QPropertyAnimation>
 #include <QEasingCurve>
+#include <QProcess>
+#include <QDesktopServices>
+#include <QUrl>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -53,9 +56,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->scrollArea->installEventFilter(this);  // 为 scrollArea 安装事件过滤器
     ui->scrollArea->viewport()->installEventFilter(this);  // 为 viewport 安装事件过滤器
 
-    // Remove the maximum height constraint from pointsGroup
-    ui->pointsGroup->setMaximumSize(16777215, 16777215);
-
     // Set initial sizes for the splitter (defined in UI file)
     // control panel gets 300px, rest goes to image
     ui->splitter->setSizes({300, 900});
@@ -70,6 +70,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->normalizedDecimalsSpin->setValue(normalizedDecimals);
     ui->colorDecimalsSpin->setValue(colorDecimals);
     ui->fileSizeDecimalsSpin->setValue(fileSizeDecimals);
+    ui->pointsListVisibleRowsSpin->setValue(pointsListVisibleRows);
 
     // Initialize coordinate format state
     currentCoordinateFormat = 0;  // Start with pixel format
@@ -89,6 +90,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->fileSizeDecimalsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
         fileSizeDecimals = value;
         updateImageInfoDisplay();
+    });
+    connect(ui->pointsListVisibleRowsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
+        pointsListVisibleRows = value;
+        updatePointsListHeight();
     });
 }
 
@@ -709,6 +714,8 @@ void MainWindow::setupConnections()
     connect(ui->loadFolderBtn, &QPushButton::clicked, this, &MainWindow::loadFolder);
     connect(ui->prevImageBtn, &QPushButton::clicked, this, &MainWindow::previousImage);
     connect(ui->nextImageBtn, &QPushButton::clicked, this, &MainWindow::nextImage);
+    connect(ui->openInExplorerBtn, &QPushButton::clicked, this, &MainWindow::onOpenInExplorerClicked);
+    connect(ui->copyImageBtn, &QPushButton::clicked, this, &MainWindow::onCopyImageClicked);
 }
 
 void MainWindow::loadImage()
@@ -749,6 +756,10 @@ void MainWindow::loadImage()
             updatePointsRGBFromImage();
             updateImageInfoDisplay();
             updateImageDisplay();
+
+            // 启用资源管理器和复制图片按钮
+            ui->openInExplorerBtn->setEnabled(true);
+            ui->copyImageBtn->setEnabled(true);
 
             // 恢复滚动条位置（尽量恢复）
             hBar->setValue(qMin(oldHScroll, hBar->maximum()));
@@ -983,6 +994,9 @@ void MainWindow::updatePointsList()
 
     // 设置统一的图标大小
     ui->pointsList->setIconSize(QSize(iconSize, iconSize));
+
+    // 更新列表高度
+    updatePointsListHeight();
 }
 
 void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
@@ -1190,6 +1204,10 @@ void MainWindow::dropEvent(QDropEvent *event)
                     // 更新所有检测点的RGB值
                     updatePointsRGBFromImage();
 
+                    // 启用资源管理器和复制图片按钮
+                    ui->openInExplorerBtn->setEnabled(true);
+                    ui->copyImageBtn->setEnabled(true);
+
                     // 恢复滚动条位置（尽量恢复）
                     hBar->setValue(qMin(oldHScroll, hBar->maximum()));
                     vBar->setValue(qMin(oldVScroll, vBar->maximum()));
@@ -1240,6 +1258,7 @@ bool MainWindow::saveJsonConfig(const QString& filePath)
     root["colorDecimals"] = colorDecimals;
     root["fileSizeDecimals"] = fileSizeDecimals;
     root["configName"] = ui->configNameEdit->text();
+    root["pointsListVisibleRows"] = pointsListVisibleRows;
 
     // 根据当前格式保存点数据
     QJsonArray pointsArray;
@@ -1415,6 +1434,10 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
     if (root.contains("fileSizeDecimals") && root["fileSizeDecimals"].isDouble()) {
         fileSizeDecimals = qBound(0, root["fileSizeDecimals"].toInt(), 3);
         ui->fileSizeDecimalsSpin->setValue(fileSizeDecimals);
+    }
+    if (root.contains("pointsListVisibleRows") && root["pointsListVisibleRows"].isDouble()) {
+        pointsListVisibleRows = qBound(1, root["pointsListVisibleRows"].toInt(), 50);
+        ui->pointsListVisibleRowsSpin->setValue(pointsListVisibleRows);
     }
 
     // Load image dimensions (backward compatible - ignore if not present)
@@ -2036,6 +2059,10 @@ void MainWindow::loadImageAtIndex(int index)
 
         // 更新按钮状态
         updateNavigationButtons();
+
+        // 启用资源管理器和复制图片按钮
+        ui->openInExplorerBtn->setEnabled(true);
+        ui->copyImageBtn->setEnabled(true);
     } else {
         QMessageBox::warning(this, "错误", QString("无法加载图片: %1").arg(fileName));
     }
@@ -2155,4 +2182,64 @@ void DetectionPoint::ensureNormalizedCoords(const QSize& imgSize)
         normX = double(x) / qMax(1, imgSize.width() - 1);
         normY = double(y) / qMax(1, imgSize.height() - 1);
     }
+}
+
+void MainWindow::onOpenInExplorerClicked()
+{
+    if (currentImageFileName.isEmpty()) {
+        QMessageBox::warning(this, "提示", "未加载图片");
+        return;
+    }
+
+    QFileInfo fileInfo(currentImageFileName);
+    if (!fileInfo.exists()) {
+        QMessageBox::warning(this, "错误", "图片文件不存在");
+        return;
+    }
+
+#ifdef Q_OS_WIN
+    // Windows: 使用 explorer 命令选中文件
+    QString command = QString("explorer.exe /select,\"%1\"").arg(currentImageFileName);
+    QProcess::startDetached(command);
+#elif defined(Q_OS_MACOS)
+    // macOS: 使用 open 命令选中文件
+    QString command = QString("open -R \"%1\"").arg(currentImageFileName);
+    QProcess::startDetached(command);
+#else
+    // Linux: 打开文件夹
+    QDesktopServices::openUrl(QUrl::fromLocalFile(fileInfo.path()));
+#endif
+}
+
+void MainWindow::onCopyImageClicked()
+{
+    if (currentImage.isNull()) {
+        QMessageBox::warning(this, "提示", "未加载图片");
+        return;
+    }
+
+    QClipboard* clipboard = QGuiApplication::clipboard();
+    clipboard->setPixmap(QPixmap::fromImage(currentImage));
+
+    QMessageBox::information(this, "成功", "图片已复制到剪贴板");
+}
+
+void MainWindow::updatePointsListHeight()
+{
+    // 根据每行的高度和可见行数设置列表高度
+    int rowHeight = 30;  // 默认每行高度
+    int totalHeight = pointsListVisibleRows * rowHeight;
+
+    // 如果列表中有项目，动态获取第一项的高度
+    if (ui->pointsList->count() > 0) {
+        QListWidgetItem* firstItem = ui->pointsList->item(0);
+        QRect itemRect = ui->pointsList->visualItemRect(firstItem);
+        if (itemRect.height() > 0) {
+            rowHeight = itemRect.height();
+            totalHeight = pointsListVisibleRows * rowHeight;
+        }
+    }
+
+    // 设置最小高度，确保至少能显示指定行数
+    ui->pointsList->setMinimumHeight(totalHeight);
 }

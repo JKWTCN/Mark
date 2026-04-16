@@ -20,14 +20,21 @@
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
       </property>
-      <widget class="QWidget" name="controlPanel">
+      <widget class="QScrollArea" name="controlPanelScrollArea">
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <property name="horizontalScrollBarPolicy">
+        <enum>Qt::ScrollBarAlwaysOff</enum>
+       </property>
        <property name="minimumSize">
         <size>
          <width>200</width>
          <height>0</height>
         </size>
        </property>
-      <layout class="QVBoxLayout" name="controlPanelLayout">
+       <widget class="QWidget" name="controlPanelScrollAreaContents">
+       <layout class="QVBoxLayout" name="controlPanelLayout">
        <item>
         <widget class="QGroupBox" name="configGroup">
          <property name="title">
@@ -115,7 +122,7 @@
             </property>
            </widget>
           </item>
-          <item row="1" column="1" colspan="3">
+          <item row="1" column="1">
            <widget class="QSpinBox" name="fileSizeDecimalsSpin">
             <property name="minimum">
              <number>0</number>
@@ -128,6 +135,32 @@
             </property>
             <property name="toolTip">
              <string>文件大小显示的小数位数</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QLabel" name="label_pointsListVisibleRows">
+            <property name="text">
+             <string>列表行数:</string>
+            </property>
+            <property name="toolTip">
+             <string>设置检测点列表可见的行数</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="3">
+           <widget class="QSpinBox" name="pointsListVisibleRowsSpin">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>50</number>
+            </property>
+            <property name="value">
+             <number>5</number>
+            </property>
+            <property name="toolTip">
+             <string>检测点列表可见的行数</string>
             </property>
            </widget>
           </item>
@@ -292,6 +325,32 @@
             </property>
            </widget>
           </item>
+          <item row="3" column="0" colspan="2">
+           <widget class="QPushButton" name="openInExplorerBtn">
+            <property name="text">
+             <string>在资源管理器打开</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="toolTip">
+             <string>在文件资源管理器中打开当前图片所在的文件夹并选中该文件</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="2" colspan="2">
+           <widget class="QPushButton" name="copyImageBtn">
+            <property name="text">
+             <string>复制图片</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="toolTip">
+             <string>复制当前图片到剪贴板</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
@@ -356,12 +415,6 @@
         <widget class="QGroupBox" name="pointsGroup">
          <property name="title">
           <string>检测点列表</string>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>16777215</width>
-           <height>200</height>
-          </size>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
@@ -470,7 +523,7 @@
                <number>10</number>
               </property>
               <property name="maximum">
-               <number>600</number>
+               <number>1000</number>
               </property>
               <property name="value">
                <number>100</number>
@@ -541,6 +594,7 @@
        </item>
       </layout>
      </widget>
+    </widget>
       <widget class="QWidget" name="imageContainer">
       <layout class="QVBoxLayout" name="verticalLayout_3">
        <item>
