@@ -32,6 +32,7 @@
 #include <QProcess>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QShortcut>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -50,6 +51,14 @@ MainWindow::MainWindow(QWidget *parent)
     ui->imageLabel->setStyleSheet("");
 
     setupConnections();
+
+    // Keyboard shortcuts for image navigation (work regardless of focus)
+    prevImageShortcut = new QShortcut(Qt::Key_Left, this);
+    nextImageShortcut = new QShortcut(Qt::Key_Right, this);
+    prevImageShortcut->setEnabled(false);
+    nextImageShortcut->setEnabled(false);
+    connect(prevImageShortcut, &QShortcut::activated, this, &MainWindow::previousImage);
+    connect(nextImageShortcut, &QShortcut::activated, this, &MainWindow::nextImage);
 
     ui->imageLabel->setMouseTracking(true);
     ui->imageLabel->installEventFilter(this);
@@ -1218,23 +1227,6 @@ void MainWindow::dropEvent(QDropEvent *event)
     event->acceptProposedAction();
 }
 
-void MainWindow::keyPressEvent(QKeyEvent *event)
-{
-    // 只在文件夹模式下支持左右箭头翻页
-    if (!imageFileList.isEmpty()) {
-        if (event->key() == Qt::Key_Left) {
-            previousImage();
-            return;
-        } else if (event->key() == Qt::Key_Right) {
-            nextImage();
-            return;
-        }
-    }
-
-    // 其他按键交给父类处理
-    QMainWindow::keyPressEvent(event);
-}
-
 bool MainWindow::saveJsonConfig(const QString& filePath)
 {
     QJsonObject root;
@@ -2073,6 +2065,8 @@ void MainWindow::updateNavigationButtons()
     bool hasImages = !imageFileList.isEmpty();
     ui->prevImageBtn->setEnabled(hasImages);
     ui->nextImageBtn->setEnabled(hasImages);
+    prevImageShortcut->setEnabled(hasImages);
+    nextImageShortcut->setEnabled(hasImages);
 }
 
 void MainWindow::updateImageCounterDisplay()

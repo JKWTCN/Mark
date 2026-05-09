@@ -20,6 +20,7 @@ QT_END_NAMESPACE
 
 // Forward declarations
 class QPropertyAnimation;
+class QShortcut;
 class QPoint;
 
 enum class ColorFormat {
@@ -102,7 +103,6 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
 
 private slots:
     void loadImage();
@@ -215,6 +215,8 @@ private:
 
     // Smooth zoom animation
     QPropertyAnimation* zoomAnimation = nullptr;
+    QShortcut* prevImageShortcut = nullptr;
+    QShortcut* nextImageShortcut = nullptr;
     void setCurrentZoom(double zoom);
     void animatedZoomTo(double targetZoom, const QPoint& centerPos = QPoint());
     void setupZoomAnimation();
