@@ -12,6 +12,8 @@
 #include <QClipboard>
 #include <QGuiApplication>
 
+class MinimapWidget;
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -221,5 +223,9 @@ private:
     void animatedZoomTo(double targetZoom, const QPoint& centerPos = QPoint());
     void setupZoomAnimation();
     void updatePointsListHeight();
+
+    // Minimap
+    MinimapWidget* minimapWidget = nullptr;
+    void updateMinimap();
 };
 #endif // MAINWINDOW_H

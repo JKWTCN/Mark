@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
+#include "minimapwidget.h"
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMessageBox>
@@ -87,6 +88,20 @@ MainWindow::MainWindow(QWidget *parent)
     // Setup smooth zoom animation
     setupZoomAnimation();
 
+    // Setup minimap
+    minimapWidget = new MinimapWidget(ui->scrollArea, ui->scrollArea->viewport());
+    connect(ui->scrollArea->horizontalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+        minimapWidget->updateViewportRect();
+    });
+    connect(ui->scrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+        minimapWidget->updateViewportRect();
+    });
+    connect(ui->showMinimapCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        if (minimapWidget) {
+            minimapWidget->setVisible(checked && !currentImage.isNull());
+        }
+    });
+
     // Connect display settings signals
     connect(ui->normalizedDecimalsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int value) {
         normalizedDecimals = value;
@@ -117,6 +132,13 @@ MainWindow::~MainWindow()
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
+    // Reposition minimap when viewport resizes
+    if (obj == ui->scrollArea->viewport() && event->type() == QEvent::Resize) {
+        if (minimapWidget) {
+            minimapWidget->reposition();
+        }
+    }
+
     // 拦截 scrollArea 或 viewport 的滚轮事件
     if ((obj == ui->scrollArea || obj == ui->scrollArea->viewport()) && event->type() == QEvent::Wheel) {
         QWheelEvent *wheelEvent = static_cast<QWheelEvent*>(event);
@@ -936,6 +958,9 @@ void MainWindow::updateImageDisplay()
     ui->imageLabel->setAlignment(Qt::AlignCenter);
     // Set the label size to match the pixmap size so scrollbars appear when zoomed
     ui->imageLabel->setFixedSize(scaledPixmap.size());
+
+    // Update minimap
+    updateMinimap();
 }
 
 void MainWindow::updatePointsList()
@@ -2101,6 +2126,11 @@ void MainWindow::setCurrentZoom(double zoom)
 
     updateImageDisplay();
     emit currentZoomChanged(m_currentZoom);
+
+    // Update minimap zoom
+    if (minimapWidget) {
+        minimapWidget->setZoom(m_currentZoom);
+    }
 }
 
 void MainWindow::animatedZoomTo(double targetZoom, const QPoint& centerPos)
@@ -2155,6 +2185,11 @@ void MainWindow::animatedZoomTo(double targetZoom, const QPoint& centerPos)
 
         hBar->setValue(qBound(hBar->minimum(), newHScroll, hBar->maximum()));
         vBar->setValue(qBound(vBar->minimum(), newVScroll, vBar->maximum()));
+
+        // Update minimap during zoom animation
+        if (minimapWidget) {
+            minimapWidget->setZoom(newZoom);
+        }
     });
 
     zoomAnimation->start(QPropertyAnimation::KeepWhenStopped);
@@ -2236,4 +2271,18 @@ void MainWindow::updatePointsListHeight()
 
     // 设置最小高度，确保至少能显示指定行数
     ui->pointsList->setMinimumHeight(totalHeight);
+}
+
+void MainWindow::updateMinimap()
+{
+    if (!minimapWidget) return;
+
+    if (currentImage.isNull()) {
+        minimapWidget->setImage(QImage());
+    } else {
+        minimapWidget->setImage(currentImage);
+        minimapWidget->setZoom(m_currentZoom);
+        minimapWidget->reposition();
+        minimapWidget->setVisible(ui->showMinimapCheckBox->isChecked());
+    }
 }

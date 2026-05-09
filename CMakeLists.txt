@@ -20,6 +20,8 @@ set(PROJECT_SOURCES
         mainwindow.cpp
         mainwindow.h
         mainwindow.ui
+        minimapwidget.cpp
+        minimapwidget.h
         ${TS_FILES}
 )
 

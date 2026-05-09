@@ -164,6 +164,19 @@
             </property>
            </widget>
           </item>
+          <item row="2" column="0" colspan="4">
+           <widget class="QCheckBox" name="showMinimapCheckBox">
+            <property name="text">
+             <string>显示小地图</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+            <property name="toolTip">
+             <string>在图片区域左下角显示小地图，可拖动导航</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
