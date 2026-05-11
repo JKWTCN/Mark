@@ -797,7 +797,7 @@ void MainWindow::loadImage()
             hBar->setValue(qMin(oldHScroll, hBar->maximum()));
             vBar->setValue(qMin(oldVScroll, vBar->maximum()));
         } else {
-            QMessageBox::warning(this, "错误", "无法加载图片");
+            ui->statusbar->showMessage("错误: 无法加载图片", 3000);
         }
     }
 }
@@ -1052,7 +1052,7 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
 
         if (coordFormat == CoordinateFormat::Normalized) {
             if (currentImage.isNull()) {
-                QMessageBox::warning(this, "错误", "请先加载图片");
+                ui->statusbar->showMessage("错误: 请先加载图片", 3000);
                 return;
             }
 
@@ -1307,9 +1307,9 @@ void MainWindow::saveConfig()
     }
 
     if (saveJsonConfig(currentConfigFilePath)) {
-        QMessageBox::information(this, "成功", "配置已保存到: " + currentConfigFilePath);
+        ui->statusbar->showMessage("成功: 配置已保存到: " + currentConfigFilePath, 3000);
     } else {
-        QMessageBox::warning(this, "错误", "保存配置失败");
+        ui->statusbar->showMessage("错误: 保存配置失败", 3000);
     }
 }
 
@@ -1317,7 +1317,7 @@ void MainWindow::saveAsConfig()
 {
     QString configName = ui->configNameEdit->text();
     if (configName.isEmpty()) {
-        QMessageBox::warning(this, "错误", "请先输入配置名称");
+        ui->statusbar->showMessage("错误: 请先输入配置名称", 3000);
         return;
     }
 
@@ -1329,9 +1329,9 @@ void MainWindow::saveAsConfig()
     if (!fileName.isEmpty()) {
         if (saveJsonConfig(fileName)) {
             currentConfigFilePath = fileName;
-            QMessageBox::information(this, "成功", "配置已保存到: " + fileName);
+            ui->statusbar->showMessage("成功: 配置已保存到: " + fileName, 3000);
         } else {
-            QMessageBox::warning(this, "错误", "保存配置失败");
+            ui->statusbar->showMessage("错误: 保存配置失败", 3000);
         }
     }
 }
@@ -1421,8 +1421,7 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
 
             // 如果检测到无效坐标，显示警告
             if (hasInvalidCoords) {
-                QMessageBox::warning(this, "警告",
-                    "配置文件中包含超出范围的归一化坐标，已自动修正到 [0, 1] 范围内");
+                ui->statusbar->showMessage("警告: 配置文件中包含超出范围的归一化坐标，已自动修正到 [0, 1] 范围内", 4000);
             }
         }
     } else {
@@ -1511,9 +1510,9 @@ void MainWindow::loadConfig()
     QString fileName = QFileDialog::getOpenFileName(this, "加载配置", "", "JSON Files (*.json)");
     if (!fileName.isEmpty()) {
         if (loadJsonConfig(fileName)) {
-            QMessageBox::information(this, "成功", "配置已加载");
+            ui->statusbar->showMessage("成功: 配置已加载", 3000);
         } else {
-            QMessageBox::warning(this, "错误", "加载配置失败，请检查文件格式");
+            ui->statusbar->showMessage("错误: 加载配置失败，请检查文件格式", 3000);
         }
     }
 }
@@ -1562,7 +1561,7 @@ void MainWindow::actualSize()
 void MainWindow::onAddPointManuallyClicked()
 {
     if (currentImage.isNull()) {
-        QMessageBox::warning(this, "错误", "请先加载图片");
+        ui->statusbar->showMessage("错误: 请先加载图片", 3000);
         return;
     }
 
@@ -1642,7 +1641,7 @@ void MainWindow::onAddPointManuallyClicked()
 
         // 验证坐标
         if (x < 0 || x >= currentImage.width() || y < 0 || y >= currentImage.height()) {
-            QMessageBox::warning(this, "错误", "坐标超出图片范围");
+            ui->statusbar->showMessage("错误: 坐标超出图片范围", 3000);
             return;
         }
 
@@ -1685,7 +1684,7 @@ void MainWindow::onDeletePointClicked()
 {
     QListWidgetItem* item = ui->pointsList->currentItem();
     if (!item) {
-        QMessageBox::warning(this, "提示", "请先选择要删除的检测点");
+        ui->statusbar->showMessage("提示: 请先选择要删除的检测点", 3000);
         return;
     }
 
@@ -1707,7 +1706,7 @@ void MainWindow::onEditPointClicked()
 {
     QListWidgetItem* item = ui->pointsList->currentItem();
     if (!item) {
-        QMessageBox::warning(this, "提示", "请先选择要编辑的检测点");
+        ui->statusbar->showMessage("提示: 请先选择要编辑的检测点", 3000);
         return;
     }
 
@@ -1768,14 +1767,14 @@ void MainWindow::onCopyPointClicked()
     // 获取当前选中项
     QListWidgetItem* item = ui->pointsList->currentItem();
     if (!item) {
-        QMessageBox::warning(this, "提示", "请先选择要复制的检测点");
+        ui->statusbar->showMessage("提示: 请先选择要复制的检测点", 3000);
         return;
     }
 
     // 获取选中点的索引
     int index = ui->pointsList->row(item);
     if (index < 0 || index >= detectionPoints.size()) {
-        QMessageBox::warning(this, "错误", "检测点索引无效");
+        ui->statusbar->showMessage("错误: 检测点索引无效", 3000);
         return;
     }
 
@@ -1790,7 +1789,7 @@ void MainWindow::onCopyPointClicked()
     QString coordPart;
     if (coordFormat == CoordinateFormat::Normalized) {
         if (currentImage.isNull()) {
-            QMessageBox::warning(this, "错误", "请先加载图片");
+            ui->statusbar->showMessage("错误: 请先加载图片", 3000);
             return;
         }
 
@@ -1900,7 +1899,7 @@ void MainWindow::onCopyPointClicked()
     clipboard->setText(copyText);
 
     // 显示成功提示
-    QMessageBox::information(this, "成功", QString("已复制到剪贴板:\n%1").arg(copyText));
+    ui->statusbar->showMessage(QString("成功: 已复制到剪贴板: %1").arg(copyText), 3000);
 }
 
 void MainWindow::onCopyCoordClicked()
@@ -1908,13 +1907,13 @@ void MainWindow::onCopyCoordClicked()
     // 1. 获取并验证选中项（复用现有逻辑）
     QListWidgetItem* item = ui->pointsList->currentItem();
     if (!item) {
-        QMessageBox::warning(this, "提示", "请先选择要复制的检测点");
+        ui->statusbar->showMessage("提示: 请先选择要复制的检测点", 3000);
         return;
     }
 
     int index = ui->pointsList->row(item);
     if (index < 0 || index >= detectionPoints.size()) {
-        QMessageBox::warning(this, "错误", "检测点索引无效");
+        ui->statusbar->showMessage("错误: 检测点索引无效", 3000);
         return;
     }
 
@@ -1925,7 +1924,7 @@ void MainWindow::onCopyCoordClicked()
 
     // 3. 检查归一化坐标是否需要图片
     if (coordFormat == CoordinateFormat::Normalized && currentImage.isNull()) {
-        QMessageBox::warning(this, "错误", "请先加载图片");
+        ui->statusbar->showMessage("错误: 请先加载图片", 3000);
         return;
     }
 
@@ -1957,8 +1956,7 @@ void MainWindow::onCopyCoordClicked()
 
     // 6. 显示成功提示
     QString formatDesc = (coordFormat == CoordinateFormat::Normalized) ? "归一化坐标" : "像素坐标";
-    QMessageBox::information(this, "成功",
-        QString("已复制%1到剪贴板:\n%2").arg(formatDesc).arg(coordText));
+    ui->statusbar->showMessage(QString("成功: 已复制%1到剪贴板: %2").arg(formatDesc).arg(coordText), 3000);
 }
 
 void MainWindow::onCopyColorClicked()
@@ -1966,13 +1964,13 @@ void MainWindow::onCopyColorClicked()
     // 1. 获取并验证选中项（复用现有逻辑）
     QListWidgetItem* item = ui->pointsList->currentItem();
     if (!item) {
-        QMessageBox::warning(this, "提示", "请先选择要复制的检测点");
+        ui->statusbar->showMessage("提示: 请先选择要复制的检测点", 3000);
         return;
     }
 
     int index = ui->pointsList->row(item);
     if (index < 0 || index >= detectionPoints.size()) {
-        QMessageBox::warning(this, "错误", "检测点索引无效");
+        ui->statusbar->showMessage("错误: 检测点索引无效", 3000);
         return;
     }
 
@@ -1989,8 +1987,7 @@ void MainWindow::onCopyColorClicked()
     clipboard->setText(colorText);
 
     // 5. 显示成功提示
-    QMessageBox::information(this, "成功",
-        QString("已复制颜色到剪贴板:\n%1").arg(colorText));
+    ui->statusbar->showMessage(QString("成功: 已复制颜色到剪贴板: %1").arg(colorText), 3000);
 }
 
 void MainWindow::loadFolder()
@@ -2024,7 +2021,7 @@ void MainWindow::loadFolder()
     }
 
     if (imageFileList.isEmpty()) {
-        QMessageBox::warning(this, "警告", "所选文件夹中没有支持的图片文件");
+        ui->statusbar->showMessage("警告: 所选文件夹中没有支持的图片文件", 3000);
         return;
     }
 
@@ -2103,7 +2100,7 @@ void MainWindow::loadImageAtIndex(int index)
         ui->openInExplorerBtn->setEnabled(true);
         ui->copyImageBtn->setEnabled(true);
     } else {
-        QMessageBox::warning(this, "错误", QString("无法加载图片: %1").arg(fileName));
+        ui->statusbar->showMessage(QString("错误: 无法加载图片: %1").arg(fileName), 3000);
     }
 }
 
@@ -2238,13 +2235,13 @@ void DetectionPoint::ensureNormalizedCoords(const QSize& imgSize)
 void MainWindow::onOpenInExplorerClicked()
 {
     if (currentImageFileName.isEmpty()) {
-        QMessageBox::warning(this, "提示", "未加载图片");
+        ui->statusbar->showMessage("提示: 未加载图片", 3000);
         return;
     }
 
     QFileInfo fileInfo(currentImageFileName);
     if (!fileInfo.exists()) {
-        QMessageBox::warning(this, "错误", "图片文件不存在");
+        ui->statusbar->showMessage("错误: 图片文件不存在", 3000);
         return;
     }
 
@@ -2265,14 +2262,14 @@ void MainWindow::onOpenInExplorerClicked()
 void MainWindow::onCopyImageClicked()
 {
     if (currentImage.isNull()) {
-        QMessageBox::warning(this, "提示", "未加载图片");
+        ui->statusbar->showMessage("提示: 未加载图片", 3000);
         return;
     }
 
     QClipboard* clipboard = QGuiApplication::clipboard();
     clipboard->setPixmap(QPixmap::fromImage(currentImage));
 
-    QMessageBox::information(this, "成功", "图片已复制到剪贴板");
+    ui->statusbar->showMessage("成功: 图片已复制到剪贴板", 3000);
 }
 
 void MainWindow::updatePointsListHeight()
