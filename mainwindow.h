@@ -110,6 +110,7 @@ private slots:
     void loadImage();
     void loadConfig();
     void saveConfig();
+    void saveAsConfig();
     void clearAllPoints();
     void onPointsListItemDoubleClicked(QListWidgetItem *item);
     void onPointsListSelectionChanged();
@@ -155,6 +156,9 @@ private:
 
     // Selected point index in the list (-1 means no selection)
     int selectedPointIndex = -1;
+
+    // Current config file path (empty if not loaded/saved yet)
+    QString currentConfigFilePath;
 
     void setupConnections();
     void updatePointsList();

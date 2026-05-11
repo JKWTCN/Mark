@@ -718,6 +718,7 @@ void MainWindow::setupConnections()
     connect(ui->loadImageBtn, &QPushButton::clicked, this, &MainWindow::loadImage);
     connect(ui->loadConfigBtn, &QPushButton::clicked, this, &MainWindow::loadConfig);
     connect(ui->saveConfigBtn, &QPushButton::clicked, this, &MainWindow::saveConfig);
+    connect(ui->saveAsConfigBtn, &QPushButton::clicked, this, &MainWindow::saveAsConfig);
     connect(ui->clearPointsBtn, &QPushButton::clicked, this, &MainWindow::clearAllPoints);
     connect(ui->colorFormatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
         updatePointsList();
@@ -1299,16 +1300,36 @@ bool MainWindow::saveJsonConfig(const QString& filePath)
 
 void MainWindow::saveConfig()
 {
+    if (currentConfigFilePath.isEmpty()) {
+        // 未加载过配置文件，跳转到另存为
+        saveAsConfig();
+        return;
+    }
+
+    if (saveJsonConfig(currentConfigFilePath)) {
+        QMessageBox::information(this, "成功", "配置已保存到: " + currentConfigFilePath);
+    } else {
+        QMessageBox::warning(this, "错误", "保存配置失败");
+    }
+}
+
+void MainWindow::saveAsConfig()
+{
     QString configName = ui->configNameEdit->text();
     if (configName.isEmpty()) {
         QMessageBox::warning(this, "错误", "请先输入配置名称");
         return;
     }
 
-    QString fileName = QFileDialog::getSaveFileName(this, "保存配置", configName + ".json", "JSON Files (*.json)");
+    QString defaultName = currentConfigFilePath.isEmpty()
+        ? configName + ".json"
+        : currentConfigFilePath;
+
+    QString fileName = QFileDialog::getSaveFileName(this, "另存为配置", defaultName, "JSON Files (*.json)");
     if (!fileName.isEmpty()) {
         if (saveJsonConfig(fileName)) {
-            QMessageBox::information(this, "成功", "配置已保存");
+            currentConfigFilePath = fileName;
+            QMessageBox::information(this, "成功", "配置已保存到: " + fileName);
         } else {
             QMessageBox::warning(this, "错误", "保存配置失败");
         }
@@ -1481,6 +1502,7 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
 
     updatePointsList();
     drawDetectionPoints();
+    currentConfigFilePath = filePath;
     return true;
 }
 
