@@ -138,7 +138,14 @@ private:
     Ui::MainWindow *ui;
     QImage currentImage;
     QList<DetectionPoint> detectionPoints;
-    double m_currentZoom = 1.0;  // Member variable for zoom level
+    double m_currentZoom = 1.0;
+
+    static constexpr double ZOOM_MIN = 0.1;
+    static constexpr double ZOOM_MAX = 32.0;
+    static constexpr double ZOOM_PIXEL_PERFECT_THRESHOLD = 2.0;
+
+    double calculateZoomStep(double currentZoom) const;
+    QString formatZoomLabel(double zoom) const;
 
     // Image file information
     QString currentImageFileName;

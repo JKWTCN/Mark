@@ -162,8 +162,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             // 阻止事件继续传播，避免触发滚动条
             wheelEvent->accept();
 
-            // 计算缩放步长（每次滚动缩放 0.1 倍）
-            double zoomStep = 0.1;
+            double zoomStep = calculateZoomStep(m_currentZoom);
 
             // 根据滚动方向确定是放大还是缩小
             double newZoom;
@@ -173,8 +172,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 newZoom = m_currentZoom - zoomStep;
             }
 
-            // 限制缩放范围：0.1 到 6.0
-            newZoom = qBound(0.1, newZoom, 6.0);
+            // 限制缩放范围
+            newZoom = qBound(ZOOM_MIN, newZoom, ZOOM_MAX);
 
             // 如果缩放比例没有变化，直接返回
             if (qFuzzyCompare(newZoom, m_currentZoom)) {
@@ -197,15 +196,16 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
             // 4. 获取当前显示的图片（缩放后的）
             QPixmap pixmap = ui->imageLabel->pixmap();
-            if (pixmap.isNull()) {
-                return false;
-            }
 
             // 5. 计算鼠标在原图上的位置（归一化坐标，不随缩放改变）
             //    这样可以在缩放后保持鼠标指向的图片内容不变
-            QSize scaledSize = pixmap.size();
-            int offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
-            int offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
+            int offsetX = 0;
+            int offsetY = 0;
+            if (!pixmap.isNull()) {
+                QSize scaledPixmapSize = pixmap.size();
+                offsetX = (ui->imageLabel->width() - scaledPixmapSize.width()) / 2;
+                offsetY = (ui->imageLabel->height() - scaledPixmapSize.height()) / 2;
+            }
 
             // 计算鼠标在原图上的坐标（相对于图片左上角，单位：原图像素）
             double imageX = (mousePos.x() + oldHScroll - offsetX) / oldZoom;
@@ -218,6 +218,50 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 
         // 没有按 Ctrl 键，让默认处理（滚动条工作）
         return false;
+    }
+
+    // 高倍率时自定义绘制 imageLabel，只渲染可见区域
+    if (obj == ui->imageLabel && event->type() == QEvent::Paint) {
+        if (m_currentZoom > ZOOM_PIXEL_PERFECT_THRESHOLD && !currentImage.isNull()) {
+            QPaintEvent* pe = static_cast<QPaintEvent*>(event);
+            QPainter painter(ui->imageLabel);
+            painter.setClipRect(pe->rect());
+
+            QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
+            QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
+
+            int srcX = static_cast<int>(hBar->value() / m_currentZoom);
+            int srcY = static_cast<int>(vBar->value() / m_currentZoom);
+            int srcW = static_cast<int>(ui->scrollArea->viewport()->width() / m_currentZoom) + 2;
+            int srcH = static_cast<int>(ui->scrollArea->viewport()->height() / m_currentZoom) + 2;
+
+            srcX = qBound(0, srcX, currentImage.width() - 1);
+            srcY = qBound(0, srcY, currentImage.height() - 1);
+            srcW = qMin(srcW, currentImage.width() - srcX);
+            srcH = qMin(srcH, currentImage.height() - srcY);
+
+            if (srcW > 0 && srcH > 0) {
+                QImage displayImage = currentImage.copy(srcX, srcY, srcW, srcH);
+                QPainter imgPainter(&displayImage);
+                for (int i = 0; i < detectionPoints.size(); ++i) {
+                    const auto& point = detectionPoints[i];
+                    int px = point.x - srcX;
+                    int py = point.y - srcY;
+                    if (px < -2 || py < -2 || px > srcW + 2 || py > srcH + 2) continue;
+                    imgPainter.setPen(i == selectedPointIndex ? QPen(Qt::blue, 3) : QPen(Qt::red, 2));
+                    imgPainter.drawEllipse(px - 2, py - 2, 4, 4);
+                }
+
+                QSize visScaledSize(static_cast<int>(srcW * m_currentZoom),
+                                     static_cast<int>(srcH * m_currentZoom));
+                QPixmap scaledPixmap = QPixmap::fromImage(displayImage).scaled(
+                    visScaledSize, Qt::KeepAspectRatio, Qt::FastTransformation);
+
+                painter.drawPixmap(static_cast<int>(srcX * m_currentZoom),
+                                    static_cast<int>(srcY * m_currentZoom), scaledPixmap);
+            }
+            return true;
+        }
     }
 
     // 其他事件，让默认处理
@@ -737,6 +781,14 @@ void MainWindow::setupConnections()
     connect(ui->zoomSlider, &QSlider::valueChanged, this, &MainWindow::zoomChanged);
     connect(ui->fitToScreenBtn, &QPushButton::clicked, this, &MainWindow::fitToScreen);
     connect(ui->actualSizeBtn, &QPushButton::clicked, this, &MainWindow::actualSize);
+
+    // 高倍率时滚动需要重新渲染可见区域
+    connect(ui->scrollArea->horizontalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+        if (m_currentZoom > ZOOM_PIXEL_PERFECT_THRESHOLD) updateImageDisplay();
+    });
+    connect(ui->scrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+        if (m_currentZoom > ZOOM_PIXEL_PERFECT_THRESHOLD) updateImageDisplay();
+    });
     connect(ui->addPointManuallyBtn, &QPushButton::clicked, this, &MainWindow::onAddPointManuallyClicked);
     connect(ui->deletePointBtn, &QPushButton::clicked, this, &MainWindow::onDeletePointClicked);
     connect(ui->editPointBtn, &QPushButton::clicked, this, &MainWindow::onEditPointClicked);
@@ -848,24 +900,26 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
             // This was a click, add detection point
             if (ui->imageLabel->underMouse()) {
                 QPoint labelPos = ui->imageLabel->mapFromGlobal(event->globalPos());
+                QSize imageSize = currentImage.size();
+
+                int imageX, imageY;
                 QPixmap pixmap = ui->imageLabel->pixmap();
                 if (!pixmap.isNull()) {
                     QSize scaledSize = pixmap.size();
-                    QSize imageSize = currentImage.size();
-
                     double scaleX = (double)imageSize.width() / scaledSize.width();
                     double scaleY = (double)imageSize.height() / scaledSize.height();
-
                     int offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
                     int offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
+                    imageX = (labelPos.x() - offsetX) * scaleX;
+                    imageY = (labelPos.y() - offsetY) * scaleY;
+                } else {
+                    imageX = static_cast<int>(labelPos.x() / m_currentZoom);
+                    imageY = static_cast<int>(labelPos.y() / m_currentZoom);
+                }
 
-                    int imageX = (labelPos.x() - offsetX) * scaleX;
-                    int imageY = (labelPos.y() - offsetY) * scaleY;
-
-                    if (imageX >= 0 && imageX < imageSize.width() &&
-                        imageY >= 0 && imageY < imageSize.height()) {
-                        addDetectionPoint(QPoint(imageX, imageY));
-                    }
+                if (imageX >= 0 && imageX < imageSize.width() &&
+                    imageY >= 0 && imageY < imageSize.height()) {
+                    addDetectionPoint(QPoint(imageX, imageY));
                 }
             }
         }
@@ -938,12 +992,26 @@ void MainWindow::updateImageDisplay()
 {
     if (currentImage.isNull()) return;
 
+    QSize scaledSize = currentImage.size() * m_currentZoom;
+
+    // 高倍率时由 eventFilter 中的 Paint 事件处理可见区域渲染
+    if (m_currentZoom > ZOOM_PIXEL_PERFECT_THRESHOLD) {
+        ui->imageLabel->setContentsMargins(0, 0, 0, 0);
+        ui->imageLabel->setFixedSize(scaledSize);
+        ui->imageLabel->setPixmap(QPixmap());
+        ui->imageLabel->update();
+        updateMinimap();
+        return;
+    }
+
+    // 低倍率：正常渲染整张图
+    ui->imageLabel->setContentsMargins(0, 0, 0, 0);
+
     QImage displayImage = currentImage.copy();
     QPainter painter(&displayImage);
 
     for (int i = 0; i < detectionPoints.size(); ++i) {
         const auto& point = detectionPoints[i];
-        // 选中的点用蓝色，其他点用红色
         if (i == selectedPointIndex) {
             painter.setPen(QPen(Qt::blue, 3));
         } else {
@@ -953,14 +1021,14 @@ void MainWindow::updateImageDisplay()
     }
 
     QPixmap pixmap = QPixmap::fromImage(displayImage);
-    QSize scaledSize = pixmap.size() * m_currentZoom;
-    QPixmap scaledPixmap = pixmap.scaled(scaledSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    Qt::TransformationMode mode = (m_currentZoom >= ZOOM_PIXEL_PERFECT_THRESHOLD)
+        ? Qt::FastTransformation
+        : Qt::SmoothTransformation;
+    QPixmap scaledPixmap = pixmap.scaled(scaledSize, Qt::KeepAspectRatio, mode);
     ui->imageLabel->setPixmap(scaledPixmap);
     ui->imageLabel->setAlignment(Qt::AlignCenter);
-    // Set the label size to match the pixmap size so scrollbars appear when zoomed
     ui->imageLabel->setFixedSize(scaledPixmap.size());
 
-    // Update minimap
     updateMinimap();
 }
 
@@ -1524,18 +1592,18 @@ void MainWindow::setZoom(double zoom)
 
 void MainWindow::zoomIn()
 {
-    setZoom(m_currentZoom + 0.1);
+    setZoom(m_currentZoom + calculateZoomStep(m_currentZoom));
 }
 
 void MainWindow::zoomOut()
 {
-    setZoom(m_currentZoom - 0.1);
+    setZoom(m_currentZoom - calculateZoomStep(m_currentZoom));
 }
 
 void MainWindow::zoomChanged(int value)
 {
     m_currentZoom = value / 100.0;
-    ui->zoomLabel->setText(QString("缩放: %1%").arg(value));
+    ui->zoomLabel->setText(formatZoomLabel(value / 100.0));
     updateImageDisplay();
 }
 
@@ -1556,6 +1624,22 @@ void MainWindow::fitToScreen()
 void MainWindow::actualSize()
 {
     setZoom(1.0);
+}
+
+double MainWindow::calculateZoomStep(double currentZoom) const
+{
+    if (currentZoom < 2.0) return 0.1;
+    if (currentZoom < 10.0) return 0.5;
+    return 1.0;
+}
+
+QString MainWindow::formatZoomLabel(double zoom) const
+{
+    double pct = zoom * 100.0;
+    if (pct >= 100.0 && std::fmod(pct, 1.0) < 0.01) {
+        return QString("缩放: %1%").arg(static_cast<int>(pct));
+    }
+    return QString("缩放: %1%").arg(pct, 0, 'f', 1);
 }
 
 void MainWindow::onAddPointManuallyClicked()
@@ -2135,13 +2219,13 @@ void MainWindow::setCurrentZoom(double zoom)
 {
     if (qFuzzyCompare(m_currentZoom, zoom)) return;
 
-    m_currentZoom = qBound(0.1, zoom, 6.0);
+    m_currentZoom = qBound(ZOOM_MIN, zoom, ZOOM_MAX);
 
     // 更新UI显示
     ui->zoomSlider->blockSignals(true);
     ui->zoomSlider->setValue(static_cast<int>(m_currentZoom * 100));
     ui->zoomSlider->blockSignals(false);
-    ui->zoomLabel->setText(QString("缩放: %1%").arg(static_cast<int>(m_currentZoom * 100)));
+    ui->zoomLabel->setText(formatZoomLabel(m_currentZoom));
 
     updateImageDisplay();
     emit currentZoomChanged(m_currentZoom);
@@ -2154,7 +2238,7 @@ void MainWindow::setCurrentZoom(double zoom)
 
 void MainWindow::animatedZoomTo(double targetZoom, const QPoint& centerPos)
 {
-    targetZoom = qBound(0.1, targetZoom, 6.0);
+    targetZoom = qBound(ZOOM_MIN, targetZoom, ZOOM_MAX);
 
     // 极小差值直接设置
     if (qAbs(targetZoom - m_currentZoom) < 0.01) {
@@ -2178,9 +2262,13 @@ void MainWindow::animatedZoomTo(double targetZoom, const QPoint& centerPos)
     // 计算中心点在原图上的归一化坐标
     QPoint mousePos = ui->scrollArea->mapFromGlobal(center);
     QPixmap pixmap = ui->imageLabel->pixmap();
-    QSize scaledSize = pixmap.size();
-    int offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
-    int offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
+    int offsetX = 0;
+    int offsetY = 0;
+    if (!pixmap.isNull()) {
+        QSize scaledSize = pixmap.size();
+        offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
+        offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
+    }
 
     double imageX = (mousePos.x() + hBar->value() - offsetX) / m_currentZoom;
     double imageY = (mousePos.y() + vBar->value() - offsetY) / m_currentZoom;
@@ -2195,9 +2283,14 @@ void MainWindow::animatedZoomTo(double targetZoom, const QPoint& centerPos)
         double newZoom = value.toDouble();
 
         // 计算新的滚动条位置
-        QSize newScaledSize = ui->imageLabel->pixmap().size();
-        int newOffsetX = (ui->imageLabel->width() - newScaledSize.width()) / 2;
-        int newOffsetY = (ui->imageLabel->height() - newScaledSize.height()) / 2;
+        QPixmap curPixmap = ui->imageLabel->pixmap();
+        int newOffsetX = 0;
+        int newOffsetY = 0;
+        if (!curPixmap.isNull()) {
+            QSize newScaledSize = curPixmap.size();
+            newOffsetX = (ui->imageLabel->width() - newScaledSize.width()) / 2;
+            newOffsetY = (ui->imageLabel->height() - newScaledSize.height()) / 2;
+        }
 
         int newHScroll = static_cast<int>(imageX * newZoom + newOffsetX - mousePos.x());
         int newVScroll = static_cast<int>(imageY * newZoom + newOffsetY - mousePos.y());
