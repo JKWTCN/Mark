@@ -180,39 +180,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
                 return true;
             }
 
-            // ========== 以鼠标位置为中心缩放 ==========
-
-            // 1. 保存旧的缩放比例
-            double oldZoom = m_currentZoom;
-
-            // 2. 获取鼠标在 scrollArea 中的相对位置
-            QPoint mousePos = ui->scrollArea->mapFromGlobal(wheelEvent->globalPosition().toPoint());
-
-            // 3. 获取当前的滚动条位置
-            QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
-            QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
-            int oldHScroll = hBar->value();
-            int oldVScroll = vBar->value();
-
-            // 4. 获取当前显示的图片（缩放后的）
-            QPixmap pixmap = ui->imageLabel->pixmap();
-
-            // 5. 计算鼠标在原图上的位置（归一化坐标，不随缩放改变）
-            //    这样可以在缩放后保持鼠标指向的图片内容不变
-            int offsetX = 0;
-            int offsetY = 0;
-            if (!pixmap.isNull()) {
-                QSize scaledPixmapSize = pixmap.size();
-                offsetX = (ui->imageLabel->width() - scaledPixmapSize.width()) / 2;
-                offsetY = (ui->imageLabel->height() - scaledPixmapSize.height()) / 2;
-            }
-
-            // 计算鼠标在原图上的坐标（相对于图片左上角，单位：原图像素）
-            double imageX = (mousePos.x() + oldHScroll - offsetX) / oldZoom;
-            double imageY = (mousePos.y() + oldVScroll - offsetY) / oldZoom;
-
-            // 6. 使用平滑动画应用新的缩放比例
-            animatedZoomTo(newZoom, wheelEvent->globalPosition().toPoint());
+            // 以画面中心为缩放中心
+            animatedZoomTo(newZoom);
             return true;
         }
 
