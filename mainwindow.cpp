@@ -241,24 +241,42 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             srcH = qMin(srcH, currentImage.height() - srcY);
 
             if (srcW > 0 && srcH > 0) {
-                QImage displayImage = currentImage.copy(srcX, srcY, srcW, srcH);
-                QPainter imgPainter(&displayImage);
-                for (int i = 0; i < detectionPoints.size(); ++i) {
-                    const auto& point = detectionPoints[i];
-                    int px = point.x - srcX;
-                    int py = point.y - srcY;
-                    if (px < -2 || py < -2 || px > srcW + 2 || py > srcH + 2) continue;
-                    imgPainter.setPen(i == selectedPointIndex ? QPen(Qt::blue, 3) : QPen(Qt::red, 2));
-                    imgPainter.drawEllipse(px - 2, py - 2, 4, 4);
-                }
-
+                // 先缩放图像（不带检测点）
+                QImage visibleRegion = currentImage.copy(srcX, srcY, srcW, srcH);
                 QSize visScaledSize(static_cast<int>(srcW * m_currentZoom),
                                      static_cast<int>(srcH * m_currentZoom));
-                QPixmap scaledPixmap = QPixmap::fromImage(displayImage).scaled(
+                QPixmap scaledPixmap = QPixmap::fromImage(visibleRegion).scaled(
                     visScaledSize, Qt::KeepAspectRatio, Qt::FastTransformation);
 
-                painter.drawPixmap(static_cast<int>(srcX * m_currentZoom),
-                                    static_cast<int>(srcY * m_currentZoom), scaledPixmap);
+                int destX = static_cast<int>(srcX * m_currentZoom);
+                int destY = static_cast<int>(srcY * m_currentZoom);
+                painter.drawPixmap(destX, destY, scaledPixmap);
+
+                // 在缩放后的图像上绘制检测点十字准星
+                int pixelSize = static_cast<int>(m_currentZoom);
+                int crossLen = qMax(pixelSize, 12);
+                for (int i = 0; i < detectionPoints.size(); ++i) {
+                    const auto& point = detectionPoints[i];
+                    int sx = static_cast<int>(point.x * m_currentZoom);
+                    int sy = static_cast<int>(point.y * m_currentZoom);
+
+                    // 跳过不在可见区域的点
+                    if (sx + crossLen < hBar->value() || sx - crossLen > hBar->value() + ui->scrollArea->viewport()->width())
+                        continue;
+                    if (sy + crossLen < vBar->value() || sy - crossLen > vBar->value() + ui->scrollArea->viewport()->height())
+                        continue;
+
+                    QColor color = (i == selectedPointIndex) ? Qt::yellow : Qt::red;
+                    painter.setPen(QPen(color, 2));
+                    // 十字线
+                    painter.drawLine(sx - crossLen, sy, sx - 2, sy);
+                    painter.drawLine(sx + 2, sy, sx + crossLen, sy);
+                    painter.drawLine(sx, sy - crossLen, sx, sy - 2);
+                    painter.drawLine(sx, sy + 2, sx, sy + crossLen);
+                    // 目标像素高亮边框
+                    painter.setPen(QPen(color, 1));
+                    painter.drawRect(sx, sy, pixelSize - 1, pixelSize - 1);
+                }
             }
             return true;
         }
