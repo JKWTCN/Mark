@@ -131,6 +131,7 @@ private slots:
     void onOpenInExplorerClicked();
     void onSelectInExplorerClicked();
     void onCopyImageClicked();
+    void onCopyImageFileClicked();
 
 signals:
     void currentZoomChanged(double newZoom);

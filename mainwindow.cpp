@@ -788,6 +788,7 @@ void MainWindow::setupConnections()
     connect(ui->openInExplorerBtn, &QPushButton::clicked, this, &MainWindow::onOpenInExplorerClicked);
     connect(ui->selectInExplorerBtn, &QPushButton::clicked, this, &MainWindow::onSelectInExplorerClicked);
     connect(ui->copyImageBtn, &QPushButton::clicked, this, &MainWindow::onCopyImageClicked);
+    connect(ui->copyImageFileBtn, &QPushButton::clicked, this, &MainWindow::onCopyImageFileClicked);
 }
 
 void MainWindow::loadImage()
@@ -833,6 +834,7 @@ void MainWindow::loadImage()
             ui->openInExplorerBtn->setEnabled(true);
             ui->selectInExplorerBtn->setEnabled(true);
             ui->copyImageBtn->setEnabled(true);
+            ui->copyImageFileBtn->setEnabled(true);
 
             // 恢复滚动条位置（尽量恢复）
             hBar->setValue(qMin(oldHScroll, hBar->maximum()));
@@ -1300,6 +1302,7 @@ void MainWindow::dropEvent(QDropEvent *event)
                     ui->openInExplorerBtn->setEnabled(true);
                     ui->selectInExplorerBtn->setEnabled(true);
                     ui->copyImageBtn->setEnabled(true);
+                    ui->copyImageFileBtn->setEnabled(true);
 
                     // 恢复滚动条位置（尽量恢复）
                     hBar->setValue(qMin(oldHScroll, hBar->maximum()));
@@ -2174,6 +2177,7 @@ void MainWindow::loadImageAtIndex(int index)
         ui->openInExplorerBtn->setEnabled(true);
         ui->selectInExplorerBtn->setEnabled(true);
         ui->copyImageBtn->setEnabled(true);
+        ui->copyImageFileBtn->setEnabled(true);
     } else {
         ui->statusbar->showMessage(QString("错误: 无法加载图片: %1").arg(fileName), 3000);
     }
@@ -2381,6 +2385,28 @@ void MainWindow::onCopyImageClicked()
     clipboard->setPixmap(QPixmap::fromImage(currentImage));
 
     ui->statusbar->showMessage("成功: 图片已复制到剪贴板", 3000);
+}
+
+void MainWindow::onCopyImageFileClicked()
+{
+    if (currentImageFileName.isEmpty()) {
+        ui->statusbar->showMessage("提示: 未加载图片", 3000);
+        return;
+    }
+
+    QFileInfo fileInfo(currentImageFileName);
+    if (!fileInfo.exists()) {
+        ui->statusbar->showMessage("错误: 图片文件不存在", 3000);
+        return;
+    }
+
+    QList<QUrl> urls;
+    urls << QUrl::fromLocalFile(fileInfo.absoluteFilePath());
+    QMimeData* mimeData = new QMimeData;
+    mimeData->setUrls(urls);
+    QGuiApplication::clipboard()->setMimeData(mimeData);
+
+    ui->statusbar->showMessage("成功: 图片文件已复制到剪贴板", 3000);
 }
 
 void MainWindow::updatePointsListHeight()

@@ -371,7 +371,7 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="0" colspan="4">
+          <item row="4" column="0" colspan="2">
            <widget class="QPushButton" name="copyImageBtn">
             <property name="text">
              <string>复制图片</string>
@@ -381,6 +381,19 @@
             </property>
             <property name="toolTip">
              <string>复制当前图片到剪贴板</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="2" colspan="2">
+           <widget class="QPushButton" name="copyImageFileBtn">
+            <property name="text">
+             <string>复制图片文件</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="toolTip">
+             <string>复制图片文件到剪贴板，可在资源管理器中粘贴</string>
             </property>
            </widget>
           </item>
