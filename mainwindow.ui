@@ -348,17 +348,30 @@
           <item row="3" column="0" colspan="2">
            <widget class="QPushButton" name="openInExplorerBtn">
             <property name="text">
-             <string>在资源管理器打开</string>
+             <string>系统默认打开方式</string>
             </property>
             <property name="enabled">
              <bool>false</bool>
             </property>
             <property name="toolTip">
-             <string>在文件资源管理器中打开当前图片所在的文件夹并选中该文件</string>
+             <string>使用系统默认方式打开当前图片</string>
             </property>
            </widget>
           </item>
           <item row="3" column="2" colspan="2">
+           <widget class="QPushButton" name="selectInExplorerBtn">
+            <property name="text">
+             <string>在资源管理器中选中</string>
+            </property>
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="toolTip">
+             <string>在文件资源管理器中打开并选中当前图片文件</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0" colspan="4">
            <widget class="QPushButton" name="copyImageBtn">
             <property name="text">
              <string>复制图片</string>

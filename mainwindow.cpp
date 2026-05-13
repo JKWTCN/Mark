@@ -786,6 +786,7 @@ void MainWindow::setupConnections()
     connect(ui->prevImageBtn, &QPushButton::clicked, this, &MainWindow::previousImage);
     connect(ui->nextImageBtn, &QPushButton::clicked, this, &MainWindow::nextImage);
     connect(ui->openInExplorerBtn, &QPushButton::clicked, this, &MainWindow::onOpenInExplorerClicked);
+    connect(ui->selectInExplorerBtn, &QPushButton::clicked, this, &MainWindow::onSelectInExplorerClicked);
     connect(ui->copyImageBtn, &QPushButton::clicked, this, &MainWindow::onCopyImageClicked);
 }
 
@@ -830,6 +831,7 @@ void MainWindow::loadImage()
 
             // 启用资源管理器和复制图片按钮
             ui->openInExplorerBtn->setEnabled(true);
+            ui->selectInExplorerBtn->setEnabled(true);
             ui->copyImageBtn->setEnabled(true);
 
             // 恢复滚动条位置（尽量恢复）
@@ -1296,6 +1298,7 @@ void MainWindow::dropEvent(QDropEvent *event)
 
                     // 启用资源管理器和复制图片按钮
                     ui->openInExplorerBtn->setEnabled(true);
+                    ui->selectInExplorerBtn->setEnabled(true);
                     ui->copyImageBtn->setEnabled(true);
 
                     // 恢复滚动条位置（尽量恢复）
@@ -2169,6 +2172,7 @@ void MainWindow::loadImageAtIndex(int index)
 
         // 启用资源管理器和复制图片按钮
         ui->openInExplorerBtn->setEnabled(true);
+        ui->selectInExplorerBtn->setEnabled(true);
         ui->copyImageBtn->setEnabled(true);
     } else {
         ui->statusbar->showMessage(QString("错误: 无法加载图片: %1").arg(fileName), 3000);
@@ -2336,6 +2340,33 @@ void MainWindow::onOpenInExplorerClicked()
 #else
     // Linux: 打开文件夹
     QDesktopServices::openUrl(QUrl::fromLocalFile(fileInfo.path()));
+#endif
+}
+
+void MainWindow::onSelectInExplorerClicked()
+{
+    if (currentImageFileName.isEmpty()) {
+        ui->statusbar->showMessage("提示: 未加载图片", 3000);
+        return;
+    }
+
+    QFileInfo fileInfo(currentImageFileName);
+    if (!fileInfo.exists()) {
+        ui->statusbar->showMessage("错误: 图片文件不存在", 3000);
+        return;
+    }
+
+#ifdef Q_OS_WIN
+    QString nativePath = QDir::toNativeSeparators(fileInfo.absoluteFilePath());
+    QStringList args;
+    args << "/select," << nativePath;
+    QProcess::startDetached("explorer.exe", args);
+#elif defined(Q_OS_MACOS)
+    QStringList args;
+    args << "-R" << fileInfo.absoluteFilePath();
+    QProcess::startDetached("open", args);
+#else
+    QDesktopServices::openUrl(QUrl::fromLocalFile(fileInfo.absolutePath()));
 #endif
 }
 

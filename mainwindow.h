@@ -129,6 +129,7 @@ private slots:
     void previousImage();
     void nextImage();
     void onOpenInExplorerClicked();
+    void onSelectInExplorerClicked();
     void onCopyImageClicked();
 
 signals:
