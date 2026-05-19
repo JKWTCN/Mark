@@ -799,7 +799,7 @@ void MainWindow::loadImage()
     }
 
     QString fileName = QFileDialog::getOpenFileName(this, "选择图片", "",
-        "Images (*.png *.jpg *.jpeg *.bmp *.webp)");
+        "Images (*.png *.jpg *.jpeg *.jfif *.bmp *.webp)");
 
     if (!fileName.isEmpty()) {
         // 清空文件夹模式，切换回单张图片模式
@@ -1275,8 +1275,8 @@ void MainWindow::dropEvent(QDropEvent *event)
         if (!urls.isEmpty()) {
             QString fileName = urls.first().toLocalFile();
             if (fileName.endsWith(".png") || fileName.endsWith(".jpg") ||
-                fileName.endsWith(".jpeg") || fileName.endsWith(".bmp") ||
-                fileName.endsWith(".webp")) {
+                fileName.endsWith(".jpeg") || fileName.endsWith(".jfif") ||
+                fileName.endsWith(".bmp") || fileName.endsWith(".webp")) {
                 // 保存当前的滚动条位置
                 QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
                 QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
@@ -1595,9 +1595,7 @@ void MainWindow::zoomOut()
 
 void MainWindow::zoomChanged(int value)
 {
-    m_currentZoom = value / 100.0;
-    ui->zoomLabel->setText(formatZoomLabel(value / 100.0));
-    updateImageDisplay();
+    animatedZoomTo(value / 100.0);
 }
 
 void MainWindow::fitToScreen()
@@ -2083,7 +2081,7 @@ void MainWindow::loadFolder()
     imageFileList.clear();
     QDir folder(folderPath);
     QStringList filters;
-    filters << "*.png" << "*.jpg" << "*.jpeg" << "*.bmp" << "*.webp";
+    filters << "*.png" << "*.jpg" << "*.jpeg" << "*.jfif" << "*.bmp" << "*.webp";
     folder.setNameFilters(filters);
 
     QFileInfoList fileList = folder.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
