@@ -1135,6 +1135,13 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             ySpinBox->setValue(normY);
             layout->addRow("Y坐标 (归一化):", ySpinBox);
             yInputWidget = ySpinBox;
+
+            // 显示对应的像素坐标（只读）
+            int pixX = point.isNormalizedPrimary() ? point.x : qRound(normX * qMax(1, currentImage.width() - 1));
+            int pixY = point.isNormalizedPrimary() ? point.y : qRound(normY * qMax(1, currentImage.height() - 1));
+            QLabel* pixelCoordLabel = new QLabel(QString("像素坐标: (%1, %2)").arg(pixX).arg(pixY), &dialog);
+            pixelCoordLabel->setStyleSheet("color: #666; font-size: 11px; padding: 3px; background-color: #f9f9f9; border: 1px solid #ddd;");
+            layout->addRow("像素坐标:", pixelCoordLabel);
         } else {
             QSpinBox* xSpinBox = new QSpinBox(&dialog);
             xSpinBox->setRange(0, currentImage.isNull() ? 1920 : currentImage.width() - 1);
@@ -1147,6 +1154,17 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             ySpinBox->setValue(point.y);
             layout->addRow("Y坐标:", ySpinBox);
             yInputWidget = ySpinBox;
+
+            // 显示对应的归一化坐标（只读）
+            if (!currentImage.isNull()) {
+                double nX = point.isNormalizedPrimary() ? point.normX :
+                           double(point.x) / qMax(1, currentImage.width() - 1);
+                double nY = point.isNormalizedPrimary() ? point.normY :
+                           double(point.y) / qMax(1, currentImage.height() - 1);
+                QLabel* normCoordLabel = new QLabel(QString("归一化坐标: (%1, %2)").arg(nX, 0, 'f', normalizedDecimals).arg(nY, 0, 'f', normalizedDecimals), &dialog);
+                normCoordLabel->setStyleSheet("color: #666; font-size: 11px; padding: 3px; background-color: #f9f9f9; border: 1px solid #ddd;");
+                layout->addRow("归一化坐标:", normCoordLabel);
+            }
         }
 
         // 显示当前RGB颜色（只读）
