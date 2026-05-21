@@ -232,6 +232,16 @@ private:
     QPropertyAnimation* zoomAnimation = nullptr;
     QShortcut* prevImageShortcut = nullptr;
     QShortcut* nextImageShortcut = nullptr;
+    QShortcut* saveShortcut = nullptr;
+    QShortcut* saveAsShortcut = nullptr;
+    QShortcut* loadImageShortcut = nullptr;
+    QShortcut* loadFolderShortcut = nullptr;
+    QShortcut* loadConfigShortcut = nullptr;
+    QShortcut* zoomInShortcut = nullptr;
+    QShortcut* zoomOutShortcut = nullptr;
+    QShortcut* fitToScreenShortcut = nullptr;
+    QShortcut* actualSizeShortcut = nullptr;
+    QShortcut* deletePointShortcut = nullptr;
     void setCurrentZoom(double zoom);
     void animatedZoomTo(double targetZoom, const QPoint& centerPos = QPoint());
     void setupZoomAnimation();

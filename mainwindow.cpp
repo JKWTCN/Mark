@@ -72,6 +72,39 @@ MainWindow::MainWindow(QWidget *parent)
     connect(prevImageShortcut, &QShortcut::activated, this, &MainWindow::previousImage);
     connect(nextImageShortcut, &QShortcut::activated, this, &MainWindow::nextImage);
 
+    // Keyboard shortcuts for save/load
+    saveShortcut = new QShortcut(QKeySequence::Save, this);
+    connect(saveShortcut, &QShortcut::activated, this, &MainWindow::saveConfig);
+
+    saveAsShortcut = new QShortcut(QKeySequence::SaveAs, this);
+    connect(saveAsShortcut, &QShortcut::activated, this, &MainWindow::saveAsConfig);
+
+    loadImageShortcut = new QShortcut(QKeySequence::Open, this);
+    connect(loadImageShortcut, &QShortcut::activated, this, &MainWindow::loadImage);
+
+    loadFolderShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), this);
+    connect(loadFolderShortcut, &QShortcut::activated, this, &MainWindow::loadFolder);
+
+    loadConfigShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_L), this);
+    connect(loadConfigShortcut, &QShortcut::activated, this, &MainWindow::loadConfig);
+
+    // Keyboard shortcuts for zoom
+    zoomInShortcut = new QShortcut(QKeySequence::ZoomIn, this);
+    connect(zoomInShortcut, &QShortcut::activated, this, &MainWindow::zoomIn);
+
+    zoomOutShortcut = new QShortcut(QKeySequence::ZoomOut, this);
+    connect(zoomOutShortcut, &QShortcut::activated, this, &MainWindow::zoomOut);
+
+    fitToScreenShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_0), this);
+    connect(fitToScreenShortcut, &QShortcut::activated, this, &MainWindow::fitToScreen);
+
+    actualSizeShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_1), this);
+    connect(actualSizeShortcut, &QShortcut::activated, this, &MainWindow::actualSize);
+
+    // Keyboard shortcut for delete selected point
+    deletePointShortcut = new QShortcut(Qt::Key_Delete, this);
+    connect(deletePointShortcut, &QShortcut::activated, this, &MainWindow::onDeletePointClicked);
+
     ui->imageLabel->setMouseTracking(true);
     ui->imageLabel->installEventFilter(this);
     ui->scrollArea->installEventFilter(this);  // 为 scrollArea 安装事件过滤器

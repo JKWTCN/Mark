@@ -25,6 +25,24 @@ Mark is a lightweight detection point annotation tool built with **Qt 6 / C++17*
 - **Copy & Paste** - Copy coordinates, colors, or image files to clipboard
 - **Explorer Integration** - Open file location or select in explorer
 - **Customizable Precision** - Adjustable decimal places for coordinates and colors
+- **Keyboard Shortcuts** - Full keyboard shortcut support for common operations
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+O` | Open image |
+| `Ctrl+Shift+O` | Open folder |
+| `Ctrl+L` | Load config |
+| `Ctrl+S` | Save config |
+| `Ctrl+Shift+S` | Save config as... |
+| `←` | Previous image |
+| `→` | Next image |
+| `Ctrl+=` | Zoom in |
+| `Ctrl+-` | Zoom out |
+| `Ctrl+0` | Fit to screen |
+| `Ctrl+1` | Actual size (100%) |
+| `Delete` | Delete selected point |
 
 ### Build
 
@@ -169,6 +187,24 @@ Mark 是一个基于 **Qt 6 / C++17** 构建的轻量级检测点标注工具。
 - **复制粘贴** - 复制坐标、颜色或图片文件到剪贴板
 - **资源管理器集成** - 在资源管理器中打开或选中文件
 - **可调精度** - 坐标和颜色值的小数位数可自定义
+- **键盘快捷键** - 常用操作全面支持键盘快捷键
+
+### 键盘快捷键
+
+| 快捷键 | 操作 |
+|---|---|
+| `Ctrl+O` | 打开图片 |
+| `Ctrl+Shift+O` | 打开文件夹 |
+| `Ctrl+L` | 加载配置 |
+| `Ctrl+S` | 保存配置 |
+| `Ctrl+Shift+S` | 另存为... |
+| `←` | 上一张图片 |
+| `→` | 下一张图片 |
+| `Ctrl+=` | 放大 |
+| `Ctrl+-` | 缩小 |
+| `Ctrl+0` | 适应屏幕 |
+| `Ctrl+1` | 实际大小 (100%) |
+| `Delete` | 删除选中检测点 |
 
 ### 构建
 
