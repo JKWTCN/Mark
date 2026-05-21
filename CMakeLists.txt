@@ -25,10 +25,15 @@ set(PROJECT_SOURCES
         ${TS_FILES}
 )
 
+set(PROJECT_RESOURCES
+        resource/resource.qrc
+)
+
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(Mark
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        ${PROJECT_RESOURCES}
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET Mark APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -46,6 +51,7 @@ else()
     else()
         add_executable(Mark
             ${PROJECT_SOURCES}
+            ${PROJECT_RESOURCES}
         )
     endif()
 
@@ -53,6 +59,11 @@ else()
 endif()
 
 target_link_libraries(Mark PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+
+# Windows executable icon
+if(WIN32)
+    target_sources(Mark PRIVATE resource/app.rc)
+endif()
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

@@ -34,6 +34,7 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QShortcut>
+#include <QIcon>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -41,6 +42,16 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     setAcceptDrops(true);
+
+    // Set window icon with multiple resolutions
+    QIcon appIcon;
+    appIcon.addFile(":/Mark_16_16.ico", QSize(16, 16));
+    appIcon.addFile(":/Mark_32_32.ico", QSize(32, 32));
+    appIcon.addFile(":/Mark_48_48.ico", QSize(48, 48));
+    appIcon.addFile(":/Mark_64_64.ico", QSize(64, 64));
+    appIcon.addFile(":/Mark_128_128.ico", QSize(128, 128));
+    appIcon.addFile(":/Mark_256_256.ico", QSize(256, 256));
+    setWindowIcon(appIcon);
 
     // Setup dark mode compatible palette for scrollArea and its contents
     ui->scrollArea->setStyleSheet("");

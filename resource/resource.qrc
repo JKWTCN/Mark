@@ -1,0 +1,10 @@
+<RCC>
+    <qresource prefix="/">
+        <file>Mark_16_16.ico</file>
+        <file>Mark_32_32.ico</file>
+        <file>Mark_48_48.ico</file>
+        <file>Mark_64_64.ico</file>
+        <file>Mark_128_128.ico</file>
+        <file>Mark_256_256.ico</file>
+    </qresource>
+</RCC>
