@@ -35,6 +35,10 @@
 #include <QUrl>
 #include <QShortcut>
 #include <QIcon>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QPushButton>
+#include <QProgressDialog>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -1240,6 +1244,217 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             sizeHint->setStyleSheet("color: gray; font-size: 10px;");
             layout->addRow(sizeHint);
         }
+
+        // 颜色范围按钮
+        QPushButton* colorRangeBtn = new QPushButton("颜色范围...", &dialog);
+        layout->addRow(colorRangeBtn);
+
+        connect(colorRangeBtn, &QPushButton::clicked, &dialog, [this, &point]() {
+            // 获取归一化坐标用于跨图片采样
+            double nx = point.normX;
+            double ny = point.normY;
+            if (!point.hasNormalized && !currentImage.isNull()) {
+                nx = double(point.x) / qMax(1, currentImage.width() - 1);
+                ny = double(point.y) / qMax(1, currentImage.height() - 1);
+            }
+
+            QStringList files = QFileDialog::getOpenFileNames(this,
+                "选择图片文件进行颜色范围分析",
+                currentImageFileName.isEmpty() ? QString() : QFileInfo(currentImageFileName).absolutePath(),
+                "图片文件 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.gif *.webp *.jfif *.pbm *.pgm *.ppm *.xpm);;所有文件 (*.*)");
+
+            if (files.isEmpty()) return;
+
+            // 采样每张图片的像素颜色
+            QList<QColor> sampledColors;
+            QStringList failedFiles;
+
+            QProgressDialog progress("正在加载图片...", "取消", 0, files.size(), this);
+            progress.setWindowModality(Qt::WindowModal);
+            progress.setMinimumDuration(0);
+            progress.setValue(0);
+
+            for (int fi = 0; fi < files.size(); ++fi) {
+                progress.setValue(fi);
+                if (progress.wasCanceled()) break;
+                progress.setLabelText(QString("正在加载: %1").arg(QFileInfo(files[fi]).fileName()));
+
+                QImage img(files[fi]);
+                if (img.isNull()) {
+                    failedFiles << QFileInfo(files[fi]).fileName();
+                    continue;
+                }
+                int px = qRound(nx * qMax(1, img.width() - 1));
+                int py = qRound(ny * qMax(1, img.height() - 1));
+                px = qBound(0, px, img.width() - 1);
+                py = qBound(0, py, img.height() - 1);
+                sampledColors.append(img.pixelColor(px, py));
+            }
+            progress.setValue(files.size());
+
+            if (sampledColors.isEmpty()) {
+                QMessageBox::warning(this, "颜色范围", "无法加载任何选中的图片文件。");
+                return;
+            }
+
+            // 创建颜色范围对话框
+            QDialog rangeDialog(this);
+            rangeDialog.setWindowTitle("颜色范围");
+            rangeDialog.setMinimumWidth(400);
+
+            QVBoxLayout* rangeLayout = new QVBoxLayout(&rangeDialog);
+
+            // 顶部：格式选择 + 文件数信息
+            QHBoxLayout* topLayout = new QHBoxLayout();
+            QComboBox* formatCombo = new QComboBox(&rangeDialog);
+            formatCombo->addItem("RGB", static_cast<int>(ColorFormat::RGB));
+            formatCombo->addItem("HSV", static_cast<int>(ColorFormat::HSV));
+            formatCombo->addItem("HSL", static_cast<int>(ColorFormat::HSL));
+            formatCombo->addItem("CMYK", static_cast<int>(ColorFormat::CMYK));
+            int defaultIdx = formatCombo->findData(static_cast<int>(getCurrentColorFormat()));
+            if (defaultIdx < 0) defaultIdx = 0;
+            formatCombo->setCurrentIndex(defaultIdx);
+            topLayout->addWidget(new QLabel("颜色格式:", &rangeDialog));
+            topLayout->addWidget(formatCombo);
+            topLayout->addStretch();
+            QLabel* countLabel = new QLabel(QString("采样文件数: %1").arg(sampledColors.size()), &rangeDialog);
+            countLabel->setStyleSheet("color: #666;");
+            topLayout->addWidget(countLabel);
+            if (!failedFiles.isEmpty()) {
+                QLabel* failLabel = new QLabel(QString("(失败: %1)").arg(failedFiles.size()), &rangeDialog);
+                failLabel->setStyleSheet("color: red; font-size: 10px;");
+                failLabel->setToolTip(failedFiles.join("\n"));
+                topLayout->addWidget(failLabel);
+            }
+            rangeLayout->addLayout(topLayout);
+
+            // 表格
+            QTableWidget* table = new QTableWidget(&rangeDialog);
+            table->setColumnCount(4);
+            table->setHorizontalHeaderLabels({"名称", "最大值", "最小值", "平均值"});
+            table->horizontalHeader()->setStretchLastSection(true);
+            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            table->setSelectionBehavior(QAbstractItemView::SelectRows);
+            table->verticalHeader()->setVisible(false);
+            rangeLayout->addWidget(table);
+
+            // 构建表格数据的 lambda
+            auto buildTable = [&](ColorFormat fmt) {
+                // 计算各分量值列表
+                QList<QStringList> components; // each: {name, values...}
+                QList<double> allValues;
+                QStringList compNames;
+
+                if (fmt == ColorFormat::RGB || fmt == ColorFormat::HEX) {
+                    compNames = {"R", "G", "B"};
+                    for (const auto& c : sampledColors) {
+                        allValues << c.red() << c.green() << c.blue();
+                    }
+                } else if (fmt == ColorFormat::HSV) {
+                    compNames = {"H (°)", "S (%)", "V (%)"};
+                    for (const auto& c : sampledColors) {
+                        auto vals = rgbToHsvValues(c.red(), c.green(), c.blue());
+                        allValues << vals[0] << vals[1] << vals[2];
+                    }
+                } else if (fmt == ColorFormat::HSL) {
+                    compNames = {"H (°)", "S (%)", "L (%)"};
+                    for (const auto& c : sampledColors) {
+                        auto vals = rgbToHslValues(c.red(), c.green(), c.blue());
+                        allValues << vals[0] << vals[1] << vals[2];
+                    }
+                } else if (fmt == ColorFormat::CMYK) {
+                    compNames = {"C", "M", "Y", "K"};
+                    for (const auto& c : sampledColors) {
+                        auto vals = rgbToCmykValues(c.red(), c.green(), c.blue());
+                        allValues << vals[0] << vals[1] << vals[2] << vals[3];
+                    }
+                }
+
+                int numComps = compNames.size();
+                table->setRowCount(numComps);
+
+                for (int i = 0; i < numComps; ++i) {
+                    double minV = std::numeric_limits<double>::max();
+                    double maxV = std::numeric_limits<double>::lowest();
+                    double sum = 0;
+                    for (int j = 0; j < sampledColors.size(); ++j) {
+                        double v = allValues[j * numComps + i];
+                        if (v < minV) minV = v;
+                        if (v > maxV) maxV = v;
+                        sum += v;
+                    }
+                    double avg = sum / sampledColors.size();
+
+                    auto formatValue = [&](double v) -> QString {
+                        if (fmt == ColorFormat::RGB || fmt == ColorFormat::HEX || fmt == ColorFormat::CMYK) {
+                            if (colorDecimals == 0)
+                                return QString::number(qRound(v));
+                            return QString::number(v, 'f', colorDecimals);
+                        }
+                        // HSV/HSL: H 是整数度数，S/V/L 是百分比
+                        if (i == 0) { // H
+                            if (colorDecimals == 0)
+                                return QString::number(qRound(v));
+                            return QString::number(v, 'f', colorDecimals);
+                        }
+                        return QString::number(v, 'f', qMax(colorDecimals, 1));
+                    };
+
+                    table->setItem(i, 0, new QTableWidgetItem(compNames[i]));
+                    table->setItem(i, 1, new QTableWidgetItem(formatValue(maxV)));
+                    table->setItem(i, 2, new QTableWidgetItem(formatValue(minV)));
+                    table->setItem(i, 3, new QTableWidgetItem(formatValue(avg)));
+                }
+
+                table->resizeColumnsToContents();
+            };
+
+            buildTable(static_cast<ColorFormat>(formatCombo->currentData().toInt()));
+
+            // 格式切换
+            connect(formatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [&](int idx) {
+                Q_UNUSED(idx);
+                buildTable(static_cast<ColorFormat>(formatCombo->currentData().toInt()));
+            });
+
+            // 复制按钮
+            QPushButton* copyBtn = new QPushButton("复制", &rangeDialog);
+            rangeLayout->addWidget(copyBtn);
+
+            connect(copyBtn, &QPushButton::clicked, &rangeDialog, [this, &sampledColors, formatCombo]() {
+                ColorFormat fmt = static_cast<ColorFormat>(formatCombo->currentData().toInt());
+                QStringList tuples;
+
+                auto formatVal = [&](double v) -> QString {
+                    if (fmt == ColorFormat::RGB || fmt == ColorFormat::HEX || fmt == ColorFormat::CMYK) {
+                        if (colorDecimals == 0)
+                            return QString::number(qRound(v));
+                        return QString::number(v, 'f', colorDecimals);
+                    }
+                    return QString::number(v, 'f', qMax(colorDecimals, 1));
+                };
+
+                for (const auto& c : sampledColors) {
+                    QStringList vals;
+                    if (fmt == ColorFormat::RGB || fmt == ColorFormat::HEX) {
+                        vals << formatVal(c.red()) << formatVal(c.green()) << formatVal(c.blue());
+                    } else if (fmt == ColorFormat::HSV) {
+                        auto v = rgbToHsvValues(c.red(), c.green(), c.blue());
+                        for (auto d : v) vals << formatVal(d);
+                    } else if (fmt == ColorFormat::HSL) {
+                        auto v = rgbToHslValues(c.red(), c.green(), c.blue());
+                        for (auto d : v) vals << formatVal(d);
+                    } else if (fmt == ColorFormat::CMYK) {
+                        auto v = rgbToCmykValues(c.red(), c.green(), c.blue());
+                        for (auto d : v) vals << formatVal(d);
+                    }
+                    tuples << "(" + vals.join(",") + ")";
+                }
+                QGuiApplication::clipboard()->setText(tuples.join(","));
+            });
+
+            rangeDialog.exec();
+        });
 
         // 添加按钮
         QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
