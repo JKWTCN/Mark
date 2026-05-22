@@ -1073,6 +1073,8 @@ void MainWindow::updateImageDisplay()
 
 void MainWindow::updatePointsList()
 {
+    int savedSelection = selectedPointIndex;
+    ui->pointsList->blockSignals(true);
     ui->pointsList->clear();
 
     ColorFormat colorFormat = getCurrentColorFormat();
@@ -1136,6 +1138,12 @@ void MainWindow::updatePointsList()
 
     // 设置统一的图标大小
     ui->pointsList->setIconSize(QSize(iconSize, iconSize));
+
+    // 恢复之前的选中状态
+    if (savedSelection >= 0 && savedSelection < detectionPoints.size()) {
+        ui->pointsList->setCurrentRow(savedSelection);
+    }
+    ui->pointsList->blockSignals(false);
 
     // 更新列表高度
     updatePointsListHeight();
