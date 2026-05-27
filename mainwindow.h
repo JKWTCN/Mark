@@ -177,6 +177,7 @@ private:
     bool loadJsonConfig(const QString& filePath);
     bool saveJsonConfig(const QString& filePath);
     void updateImageDisplay();
+    QSize fitToScreenAvailableSize() const;
     void setZoom(double zoom);
     void updatePointsRGBFromImage();
     void updateImageInfoDisplay();

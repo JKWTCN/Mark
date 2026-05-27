@@ -39,6 +39,7 @@
 #include <QHeaderView>
 #include <QPushButton>
 #include <QProgressDialog>
+#include <QLayout>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -1887,7 +1888,7 @@ void MainWindow::fitToScreen()
 {
     if (currentImage.isNull()) return;
 
-    QSize scrollSize = ui->scrollArea->viewport()->size();
+    QSize scrollSize = fitToScreenAvailableSize();
     QSize imageSize = currentImage.size();
 
     double scaleX = (double)scrollSize.width() / imageSize.width();
@@ -1895,6 +1896,29 @@ void MainWindow::fitToScreen()
     double fitZoom = qMin(scaleX, scaleY);
 
     animatedZoomTo(fitZoom);
+}
+
+QSize MainWindow::fitToScreenAvailableSize() const
+{
+    QSize availableSize = ui->scrollArea->viewport()->size();
+
+    if (QLayout* contentsLayout = ui->scrollAreaContents->layout()) {
+        QMargins margins = contentsLayout->contentsMargins();
+        availableSize.rwidth() -= margins.left() + margins.right();
+        availableSize.rheight() -= margins.top() + margins.bottom();
+    }
+
+    if (ui->statusbar->isVisible()) {
+        const int viewportTop = ui->scrollArea->viewport()->mapTo(this, QPoint(0, 0)).y();
+        const int statusbarTop = ui->statusbar->mapTo(this, QPoint(0, 0)).y();
+        if (statusbarTop > viewportTop) {
+            availableSize.setHeight(qMin(availableSize.height(), statusbarTop - viewportTop));
+        }
+    }
+
+    availableSize.setWidth(qMax(1, availableSize.width()));
+    availableSize.setHeight(qMax(1, availableSize.height()));
+    return availableSize;
 }
 
 void MainWindow::actualSize()
