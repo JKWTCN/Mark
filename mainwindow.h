@@ -132,6 +132,7 @@ private slots:
     void onSelectInExplorerClicked();
     void onCopyImageClicked();
     void onCopyImageFileClicked();
+    void onRenameImageFileClicked();
 
 signals:
     void currentZoomChanged(double newZoom);
@@ -181,6 +182,8 @@ private:
     void setZoom(double zoom);
     void updatePointsRGBFromImage();
     void updateImageInfoDisplay();
+    void focusImageFileNameEditor();
+    void commitImageFileRenameFromEditors();
     QString formatFileSize(qint64 bytes);
 
     // Color format conversion functions
@@ -243,6 +246,7 @@ private:
     QShortcut* fitToScreenShortcut = nullptr;
     QShortcut* actualSizeShortcut = nullptr;
     QShortcut* deletePointShortcut = nullptr;
+    QShortcut* renameImageShortcut = nullptr;
     void setCurrentZoom(double zoom);
     void animatedZoomTo(double targetZoom, const QPoint& centerPos = QPoint());
     void setupZoomAnimation();

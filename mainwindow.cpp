@@ -1,10 +1,10 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 #include "minimapwidget.h"
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMessageBox>
-#include <QInputDialog>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QKeyEvent>
@@ -24,6 +24,7 @@
 #include <QSpinBox>
 #include <QDoubleSpinBox>
 #include <QLabel>
+#include <QLineEdit>
 #include <QComboBox>
 #include <QtMath>
 #include <QDir>
@@ -109,6 +110,10 @@ MainWindow::MainWindow(QWidget *parent)
     // Keyboard shortcut for delete selected point
     deletePointShortcut = new QShortcut(Qt::Key_Delete, this);
     connect(deletePointShortcut, &QShortcut::activated, this, &MainWindow::onDeletePointClicked);
+
+    renameImageShortcut = new QShortcut(Qt::Key_F2, this);
+    renameImageShortcut->setEnabled(false);
+    connect(renameImageShortcut, &QShortcut::activated, this, &MainWindow::onRenameImageFileClicked);
 
     ui->imageLabel->setMouseTracking(true);
     ui->imageLabel->installEventFilter(this);
@@ -759,7 +764,12 @@ void MainWindow::updateImageInfoDisplay()
         ui->imageWidthValue->setText("-");
         ui->imageHeightValue->setText("-");
         ui->imageSizeValue->setText("-");
-        ui->imageFileNameValue->setText("未加载图片");
+        ui->imageFileBaseNameEdit->setText("未加载图片");
+        ui->imageFileExtensionEdit->clear();
+        ui->imageFileBaseNameEdit->setEnabled(false);
+        ui->imageFileExtensionEdit->setEnabled(false);
+        ui->imageFileBaseNameEdit->setToolTip("");
+        ui->imageFileExtensionEdit->setToolTip("");
         ui->imageFileSizeValue->setText("-");
     } else {
         int width = currentImage.width();
@@ -771,15 +781,12 @@ void MainWindow::updateImageInfoDisplay()
 
         if (!currentImageFileName.isEmpty()) {
             QFileInfo fileInfo(currentImageFileName);
-            QString fileName = fileInfo.fileName();
-
-            // Elide long filenames (max 40 characters)
-            if (fileName.length() > 40) {
-                fileName = fileName.left(18) + "..." + fileName.right(19);
-            }
-
-            ui->imageFileNameValue->setText(fileName);
-            ui->imageFileNameValue->setToolTip(currentImageFileName);
+            ui->imageFileBaseNameEdit->setText(fileInfo.completeBaseName());
+            ui->imageFileExtensionEdit->setText(fileInfo.suffix());
+            ui->imageFileBaseNameEdit->setEnabled(true);
+            ui->imageFileExtensionEdit->setEnabled(true);
+            ui->imageFileBaseNameEdit->setToolTip(currentImageFileName);
+            ui->imageFileExtensionEdit->setToolTip(currentImageFileName);
 
             if (currentImageFileSize > 0) {
                 ui->imageFileSizeValue->setText(formatFileSize(currentImageFileSize));
@@ -787,7 +794,12 @@ void MainWindow::updateImageInfoDisplay()
                 ui->imageFileSizeValue->setText("-");
             }
         } else {
-            ui->imageFileNameValue->setText("(拖放加载)");
+            ui->imageFileBaseNameEdit->setText("(拖放加载)");
+            ui->imageFileExtensionEdit->clear();
+            ui->imageFileBaseNameEdit->setEnabled(false);
+            ui->imageFileExtensionEdit->setEnabled(false);
+            ui->imageFileBaseNameEdit->setToolTip("");
+            ui->imageFileExtensionEdit->setToolTip("");
             ui->imageFileSizeValue->setText("-");
         }
     }
@@ -838,6 +850,8 @@ void MainWindow::setupConnections()
     connect(ui->selectInExplorerBtn, &QPushButton::clicked, this, &MainWindow::onSelectInExplorerClicked);
     connect(ui->copyImageBtn, &QPushButton::clicked, this, &MainWindow::onCopyImageClicked);
     connect(ui->copyImageFileBtn, &QPushButton::clicked, this, &MainWindow::onCopyImageFileClicked);
+    connect(ui->imageFileBaseNameEdit, &QLineEdit::returnPressed, this, &MainWindow::commitImageFileRenameFromEditors);
+    connect(ui->imageFileExtensionEdit, &QLineEdit::returnPressed, this, &MainWindow::commitImageFileRenameFromEditors);
 }
 
 void MainWindow::loadImage()
@@ -884,6 +898,7 @@ void MainWindow::loadImage()
             ui->selectInExplorerBtn->setEnabled(true);
             ui->copyImageBtn->setEnabled(true);
             ui->copyImageFileBtn->setEnabled(true);
+            renameImageShortcut->setEnabled(true);
 
             // 恢复滚动条位置（尽量恢复）
             hBar->setValue(qMin(oldHScroll, hBar->maximum()));
@@ -1589,6 +1604,7 @@ void MainWindow::dropEvent(QDropEvent *event)
                     ui->selectInExplorerBtn->setEnabled(true);
                     ui->copyImageBtn->setEnabled(true);
                     ui->copyImageFileBtn->setEnabled(true);
+                    renameImageShortcut->setEnabled(true);
 
                     // 恢复滚动条位置（尽量恢复）
                     hBar->setValue(qMin(oldHScroll, hBar->maximum()));
@@ -1837,7 +1853,10 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
         ui->imageWidthValue->setText(QString::number(imageWidth));
         ui->imageHeightValue->setText(QString::number(imageHeight));
         ui->imageSizeValue->setText(QString("%1 x %2").arg(imageWidth).arg(imageHeight));
-        ui->imageFileNameValue->setText("(配置中的尺寸)");
+        ui->imageFileBaseNameEdit->setText("(配置中的尺寸)");
+        ui->imageFileExtensionEdit->clear();
+        ui->imageFileBaseNameEdit->setEnabled(false);
+        ui->imageFileExtensionEdit->setEnabled(false);
         ui->imageFileSizeValue->setText("-");
     }
 
@@ -2485,6 +2504,7 @@ void MainWindow::loadImageAtIndex(int index)
         ui->selectInExplorerBtn->setEnabled(true);
         ui->copyImageBtn->setEnabled(true);
         ui->copyImageFileBtn->setEnabled(true);
+        renameImageShortcut->setEnabled(true);
     } else {
         ui->statusbar->showMessage(QString("错误: 无法加载图片: %1").arg(fileName), 3000);
     }
@@ -2679,6 +2699,107 @@ void MainWindow::onSelectInExplorerClicked()
 #else
     QDesktopServices::openUrl(QUrl::fromLocalFile(fileInfo.absolutePath()));
 #endif
+}
+
+void MainWindow::onRenameImageFileClicked()
+{
+    focusImageFileNameEditor();
+}
+
+void MainWindow::focusImageFileNameEditor()
+{
+    if (currentImageFileName.isEmpty()) {
+        ui->statusbar->showMessage("提示: 未加载图片", 3000);
+        return;
+    }
+
+    ui->imageFileBaseNameEdit->setFocus();
+    ui->imageFileBaseNameEdit->selectAll();
+}
+
+void MainWindow::commitImageFileRenameFromEditors()
+{
+    if (currentImageFileName.isEmpty()) {
+        ui->statusbar->showMessage("提示: 未加载图片", 3000);
+        return;
+    }
+
+    QFileInfo oldFileInfo(currentImageFileName);
+    if (!oldFileInfo.exists()) {
+        ui->statusbar->showMessage("错误: 图片文件不存在", 3000);
+        return;
+    }
+
+    const QString newBaseName = ui->imageFileBaseNameEdit->text().trimmed();
+    QString newExtension = ui->imageFileExtensionEdit->text().trimmed();
+    while (newExtension.startsWith('.')) {
+        newExtension.remove(0, 1);
+    }
+
+    if (newBaseName.isEmpty()) {
+        QMessageBox::warning(this, "重命名失败", "请输入文件名。");
+        return;
+    }
+
+    if (newBaseName.contains('/') || newBaseName.contains('\\') ||
+        newExtension.contains('/') || newExtension.contains('\\') ||
+        QDir::isAbsolutePath(newBaseName) || QDir::isAbsolutePath(newExtension)) {
+        QMessageBox::warning(this, "重命名失败", "请输入文件名和扩展名，不要包含路径。");
+        return;
+    }
+
+#ifdef Q_OS_WIN
+    const QString invalidChars = "<>:\"|?*";
+    for (const QChar& ch : invalidChars) {
+        if (newBaseName.contains(ch) || newExtension.contains(ch)) {
+            QMessageBox::warning(this, "重命名失败", "文件名包含 Windows 不允许的字符: < > : \" | ? *");
+            return;
+        }
+    }
+#endif
+
+    const QString newFileName = newExtension.isEmpty()
+        ? newBaseName
+        : QString("%1.%2").arg(newBaseName, newExtension);
+
+    QDir dir(oldFileInfo.absolutePath());
+    QString newFilePath = dir.absoluteFilePath(newFileName);
+    QFileInfo newFileInfo(newFilePath);
+
+    if (QDir::cleanPath(newFileInfo.absoluteFilePath()) == QDir::cleanPath(oldFileInfo.absoluteFilePath())) {
+        ui->imageFileBaseNameEdit->clearFocus();
+        ui->imageFileExtensionEdit->clearFocus();
+        return;
+    }
+
+    if (newFileInfo.exists()) {
+        QMessageBox::warning(this, "重命名失败", "目标文件名已存在。");
+        return;
+    }
+
+    if (!QFile::rename(oldFileInfo.absoluteFilePath(), newFilePath)) {
+        QMessageBox::warning(this, "重命名失败", "无法重命名文件，请确认文件未被其他程序占用且当前目录可写。");
+        return;
+    }
+
+    currentImageFileName = newFilePath;
+    currentImageFileSize = QFileInfo(newFilePath).size();
+
+    int renamedIndex = imageFileList.indexOf(oldFileInfo.absoluteFilePath());
+    if (renamedIndex >= 0) {
+        imageFileList[renamedIndex] = newFilePath;
+        std::sort(imageFileList.begin(), imageFileList.end(), [](const QString& a, const QString& b) {
+            return QFileInfo(a).fileName().compare(QFileInfo(b).fileName(), Qt::CaseInsensitive) < 0;
+        });
+        currentImageIndex = imageFileList.indexOf(newFilePath);
+        updateImageCounterDisplay();
+        updateNavigationButtons();
+    }
+
+    updateImageInfoDisplay();
+    ui->imageFileBaseNameEdit->clearFocus();
+    ui->imageFileExtensionEdit->clearFocus();
+    ui->statusbar->showMessage(QString("成功: 已重命名为 %1").arg(QFileInfo(newFilePath).fileName()), 3000);
 }
 
 void MainWindow::onCopyImageClicked()

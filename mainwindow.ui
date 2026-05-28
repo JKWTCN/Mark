@@ -259,17 +259,55 @@
            </widget>
           </item>
           <item row="2" column="1" colspan="3">
-           <widget class="QLabel" name="imageFileNameValue">
-            <property name="text">
-             <string>-</string>
+           <layout class="QHBoxLayout" name="imageFileNameLayout">
+            <property name="spacing">
+             <number>4</number>
             </property>
-            <property name="wordWrap">
-             <bool>false</bool>
+            <property name="leftMargin">
+             <number>0</number>
             </property>
-            <property name="styleSheet">
-             <string>qproperty-alignment: AlignLeft | AlignVCenter;</string>
+            <property name="topMargin">
+             <number>0</number>
             </property>
-           </widget>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QLineEdit" name="imageFileBaseNameEdit">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="placeholderText">
+               <string>文件名</string>
+              </property>
+              <property name="clearButtonEnabled">
+               <bool>false</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="imageFileExtensionEdit">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>90</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="placeholderText">
+               <string>扩展名</string>
+              </property>
+              <property name="clearButtonEnabled">
+               <bool>false</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
          </layout>
         </widget>
