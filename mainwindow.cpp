@@ -1661,12 +1661,64 @@ bool MainWindow::saveJsonConfig(const QString& filePath)
     return false;
 }
 
+static bool readConfigImageSize(const QString& filePath, QSize& imageSize)
+{
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+
+    QJsonParseError error;
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &error);
+    if (error.error != QJsonParseError::NoError || !doc.isObject()) {
+        return false;
+    }
+
+    QJsonObject root = doc.object();
+    if (!root["imageWidth"].isDouble() || !root["imageHeight"].isDouble()) {
+        return false;
+    }
+
+    int width = root["imageWidth"].toInt();
+    int height = root["imageHeight"].toInt();
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+
+    imageSize = QSize(width, height);
+    return true;
+}
+
 void MainWindow::saveConfig()
 {
     if (currentConfigFilePath.isEmpty()) {
         // 未加载过配置文件，跳转到另存为
         saveAsConfig();
         return;
+    }
+
+    QSize savedImageSize;
+    if (!currentImage.isNull() &&
+        readConfigImageSize(currentConfigFilePath, savedImageSize) &&
+        savedImageSize != currentImage.size()) {
+        QString message = QString("当前图片分辨率为 %1 x %2，原配置保存时的分辨率为 %3 x %4。\n\n"
+                                  "继续覆盖保存可能会改变像素坐标对应的归一化结果。是否继续覆盖？")
+                              .arg(currentImage.width())
+                              .arg(currentImage.height())
+                              .arg(savedImageSize.width())
+                              .arg(savedImageSize.height());
+
+        QMessageBox::StandardButton result = QMessageBox::warning(
+            this,
+            "分辨率不一致",
+            message,
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+
+        if (result != QMessageBox::Yes) {
+            ui->statusbar->showMessage("已取消保存", 3000);
+            return;
+        }
     }
 
     if (saveJsonConfig(currentConfigFilePath)) {
