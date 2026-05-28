@@ -2788,10 +2788,7 @@ void MainWindow::commitImageFileRenameFromEditors()
     int renamedIndex = imageFileList.indexOf(oldFileInfo.absoluteFilePath());
     if (renamedIndex >= 0) {
         imageFileList[renamedIndex] = newFilePath;
-        std::sort(imageFileList.begin(), imageFileList.end(), [](const QString& a, const QString& b) {
-            return QFileInfo(a).fileName().compare(QFileInfo(b).fileName(), Qt::CaseInsensitive) < 0;
-        });
-        currentImageIndex = imageFileList.indexOf(newFilePath);
+        currentImageIndex = renamedIndex;
         updateImageCounterDisplay();
         updateNavigationButtons();
     }
