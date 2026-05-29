@@ -175,6 +175,8 @@ private:
     void addDetectionPoint(const QPoint& pos);
     QColor getPixelColor(const QPoint& pos) const;
     void drawDetectionPoints();
+    bool loadImageFile(const QString& filePath);
+    bool loadImageFolder(const QString& folderPath);
     bool loadJsonConfig(const QString& filePath);
     bool saveJsonConfig(const QString& filePath);
     void updateImageDisplay();

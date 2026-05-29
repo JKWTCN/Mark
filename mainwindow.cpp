@@ -42,6 +42,15 @@
 #include <QProgressDialog>
 #include <QLayout>
 
+namespace {
+bool isSupportedImageFile(const QFileInfo& fileInfo)
+{
+    const QString suffix = fileInfo.suffix().toLower();
+    return suffix == "png" || suffix == "jpg" || suffix == "jpeg" ||
+           suffix == "jfif" || suffix == "bmp" || suffix == "webp";
+}
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -856,57 +865,69 @@ void MainWindow::setupConnections()
 
 void MainWindow::loadImage()
 {
+    QString fileName = QFileDialog::getOpenFileName(this, "选择图片", "",
+        "Images (*.png *.jpg *.jpeg *.jfif *.bmp *.webp)");
+
+    if (!fileName.isEmpty()) {
+        if (!loadImageFile(fileName)) {
+            ui->statusbar->showMessage("错误: 无法加载图片", 3000);
+        }
+    }
+}
+
+bool MainWindow::loadImageFile(const QString& filePath)
+{
+    QFileInfo fileInfo(filePath);
+    if (!fileInfo.isFile() || !isSupportedImageFile(fileInfo)) {
+        return false;
+    }
+
     // Stop any running animation when switching images
     if (zoomAnimation && zoomAnimation->state() == QPropertyAnimation::Running) {
         zoomAnimation->stop();
     }
 
-    QString fileName = QFileDialog::getOpenFileName(this, "选择图片", "",
-        "Images (*.png *.jpg *.jpeg *.jfif *.bmp *.webp)");
-
-    if (!fileName.isEmpty()) {
-        // 清空文件夹模式，切换回单张图片模式
-        if (!imageFileList.isEmpty()) {
-            imageFileList.clear();
-            currentImageIndex = -1;
-            updateNavigationButtons();
-            updateImageCounterDisplay();
-        }
-
-        // 保存当前的滚动条位置
-        QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
-        QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
-        int oldHScroll = hBar->value();
-        int oldVScroll = vBar->value();
-
-        currentImage.load(fileName);
-        if (!currentImage.isNull()) {
-            // 保存图片文件信息
-            currentImageFileName = fileName;
-            QFileInfo fileInfo(fileName);
-            currentImageFileSize = fileInfo.size();
-
-            ui->imageLabel->setText("");
-            // 保持当前缩放比例，不调用 fitToScreen()
-            // 先更新所有检测点的RGB值和坐标
-            updatePointsRGBFromImage();
-            updateImageInfoDisplay();
-            updateImageDisplay();
-
-            // 启用资源管理器和复制图片按钮
-            ui->openInExplorerBtn->setEnabled(true);
-            ui->selectInExplorerBtn->setEnabled(true);
-            ui->copyImageBtn->setEnabled(true);
-            ui->copyImageFileBtn->setEnabled(true);
-            renameImageShortcut->setEnabled(true);
-
-            // 恢复滚动条位置（尽量恢复）
-            hBar->setValue(qMin(oldHScroll, hBar->maximum()));
-            vBar->setValue(qMin(oldVScroll, vBar->maximum()));
-        } else {
-            ui->statusbar->showMessage("错误: 无法加载图片", 3000);
-        }
+    // 清空文件夹模式，切换回单张图片模式
+    if (!imageFileList.isEmpty()) {
+        imageFileList.clear();
+        currentImageIndex = -1;
+        updateNavigationButtons();
+        updateImageCounterDisplay();
     }
+
+    // 保存当前的滚动条位置
+    QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
+    QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
+    int oldHScroll = hBar->value();
+    int oldVScroll = vBar->value();
+
+    currentImage.load(filePath);
+    if (currentImage.isNull()) {
+        return false;
+    }
+
+    // 保存图片文件信息
+    currentImageFileName = filePath;
+    currentImageFileSize = fileInfo.size();
+
+    ui->imageLabel->setText("");
+    // 保持当前缩放比例，不调用 fitToScreen()
+    // 先更新所有检测点的RGB值和坐标
+    updatePointsRGBFromImage();
+    updateImageInfoDisplay();
+    updateImageDisplay();
+
+    // 启用资源管理器和复制图片按钮
+    ui->openInExplorerBtn->setEnabled(true);
+    ui->selectInExplorerBtn->setEnabled(true);
+    ui->copyImageBtn->setEnabled(true);
+    ui->copyImageFileBtn->setEnabled(true);
+    renameImageShortcut->setEnabled(true);
+
+    // 恢复滚动条位置（尽量恢复）
+    hBar->setValue(qMin(oldHScroll, hBar->maximum()));
+    vBar->setValue(qMin(oldVScroll, vBar->maximum()));
+    return true;
 }
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
@@ -1559,61 +1580,53 @@ void MainWindow::clearAllPoints()
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
     if (event->mimeData()->hasUrls()) {
-        event->acceptProposedAction();
+        const QList<QUrl> urls = event->mimeData()->urls();
+        for (const QUrl& url : urls) {
+            QFileInfo fileInfo(url.toLocalFile());
+            if (fileInfo.isDir() ||
+                fileInfo.suffix().compare("json", Qt::CaseInsensitive) == 0 ||
+                isSupportedImageFile(fileInfo)) {
+                event->acceptProposedAction();
+                return;
+            }
+        }
     }
 }
 
 void MainWindow::dropEvent(QDropEvent *event)
 {
-    // Stop any running animation when switching images
-    if (zoomAnimation && zoomAnimation->state() == QPropertyAnimation::Running) {
-        zoomAnimation->stop();
-    }
-
     const QMimeData* mimeData = event->mimeData();
     if (mimeData->hasUrls()) {
         QList<QUrl> urls = mimeData->urls();
-        if (!urls.isEmpty()) {
-            QString fileName = urls.first().toLocalFile();
-            if (fileName.endsWith(".png") || fileName.endsWith(".jpg") ||
-                fileName.endsWith(".jpeg") || fileName.endsWith(".jfif") ||
-                fileName.endsWith(".bmp") || fileName.endsWith(".webp")) {
-                // 保存当前的滚动条位置
-                QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
-                QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
-                int oldHScroll = hBar->value();
-                int oldVScroll = vBar->value();
+        for (const QUrl& url : urls) {
+            const QString path = url.toLocalFile();
+            QFileInfo fileInfo(path);
 
-                currentImage.load(fileName);
-                if (!currentImage.isNull()) {
-                    // 保存图片文件信息
-                    currentImageFileName = fileName;
-                    QFileInfo fileInfo(fileName);
-                    currentImageFileSize = fileInfo.size();
-
-                    ui->imageLabel->setText("");
-                    // 保持当前缩放比例，不调用 fitToScreen()
-                    updateImageDisplay();
-                    updateImageInfoDisplay();
-
-                    // 更新所有检测点的RGB值
-                    updatePointsRGBFromImage();
-
-                    // 启用资源管理器和复制图片按钮
-                    ui->openInExplorerBtn->setEnabled(true);
-                    ui->selectInExplorerBtn->setEnabled(true);
-                    ui->copyImageBtn->setEnabled(true);
-                    ui->copyImageFileBtn->setEnabled(true);
-                    renameImageShortcut->setEnabled(true);
-
-                    // 恢复滚动条位置（尽量恢复）
-                    hBar->setValue(qMin(oldHScroll, hBar->maximum()));
-                    vBar->setValue(qMin(oldVScroll, vBar->maximum()));
+            if (fileInfo.isDir()) {
+                if (loadImageFolder(path)) {
+                    ui->statusbar->showMessage("成功: 文件夹已加载", 3000);
                 }
+                event->acceptProposedAction();
+                return;
+            }
+
+            if (fileInfo.suffix().compare("json", Qt::CaseInsensitive) == 0) {
+                if (loadJsonConfig(path)) {
+                    ui->statusbar->showMessage("成功: 配置已加载", 3000);
+                } else {
+                    ui->statusbar->showMessage("错误: 加载配置失败，请检查文件格式", 3000);
+                }
+                event->acceptProposedAction();
+                return;
+            }
+
+            if (loadImageFile(path)) {
+                event->acceptProposedAction();
+                return;
             }
         }
     }
-    event->acceptProposedAction();
+    event->ignore();
 }
 
 bool MainWindow::saveJsonConfig(const QString& filePath)
@@ -2457,9 +2470,22 @@ void MainWindow::loadFolder()
         return;  // 用户取消选择
     }
 
+    if (!loadImageFolder(folderPath)) {
+        ui->statusbar->showMessage("警告: 所选文件夹中没有支持的图片文件", 3000);
+    }
+}
+
+bool MainWindow::loadImageFolder(const QString& folderPath)
+{
     // 扫描文件夹中的所有图片文件
     imageFileList.clear();
     QDir folder(folderPath);
+    if (!folder.exists()) {
+        updateNavigationButtons();
+        updateImageCounterDisplay();
+        return false;
+    }
+
     QStringList filters;
     filters << "*.png" << "*.jpg" << "*.jpeg" << "*.jfif" << "*.bmp" << "*.webp";
     folder.setNameFilters(filters);
@@ -2476,8 +2502,9 @@ void MainWindow::loadFolder()
     }
 
     if (imageFileList.isEmpty()) {
-        ui->statusbar->showMessage("警告: 所选文件夹中没有支持的图片文件", 3000);
-        return;
+        updateNavigationButtons();
+        updateImageCounterDisplay();
+        return false;
     }
 
     // 保存文件夹路径
@@ -2486,6 +2513,7 @@ void MainWindow::loadFolder()
     // 加载第一张图片
     currentImageIndex = 0;
     loadImageAtIndex(currentImageIndex);
+    return true;
 }
 
 void MainWindow::previousImage()
