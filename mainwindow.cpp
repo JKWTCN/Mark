@@ -41,6 +41,13 @@
 #include <QPushButton>
 #include <QProgressDialog>
 #include <QLayout>
+#include <QInputDialog>
+#include <QTextStream>
+#include <QAbstractSpinBox>
+#include <QApplication>
+#include <limits>
+#include <functional>
+#include <memory>
 
 namespace {
 bool isSupportedImageFile(const QFileInfo& fileInfo)
@@ -48,6 +55,16 @@ bool isSupportedImageFile(const QFileInfo& fileInfo)
     const QString suffix = fileInfo.suffix().toLower();
     return suffix == "png" || suffix == "jpg" || suffix == "jpeg" ||
            suffix == "jfif" || suffix == "bmp" || suffix == "webp";
+}
+
+QString csvEscape(const QString& value)
+{
+    QString escaped = value;
+    escaped.replace("\"", "\"\"");
+    if (escaped.contains(',') || escaped.contains('"') || escaped.contains('\n') || escaped.contains('\r')) {
+        return "\"" + escaped + "\"";
+    }
+    return escaped;
 }
 }
 
@@ -76,6 +93,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Clear fixed background color from imageLabel to use system theme
     ui->imageLabel->setStyleSheet("");
+
+    imageGroups.resize(10);
+    for (int i = 0; i < imageGroups.size(); ++i) {
+        imageGroupNames << defaultImageGroupName(i);
+    }
 
     setupConnections();
 
@@ -123,6 +145,20 @@ MainWindow::MainWindow(QWidget *parent)
     renameImageShortcut = new QShortcut(Qt::Key_F2, this);
     renameImageShortcut->setEnabled(false);
     connect(renameImageShortcut, &QShortcut::activated, this, &MainWindow::onRenameImageFileClicked);
+
+    for (int i = 0; i < 10; ++i) {
+        const int groupIndex = (i == 9) ? 9 : i;
+        const int key = (i == 9) ? Qt::Key_0 : Qt::Key_1 + i;
+        QShortcut* shortcut = new QShortcut(QKeySequence(key), this);
+        imageGroupShortcuts.append(shortcut);
+        connect(shortcut, &QShortcut::activated, this, [this, groupIndex]() {
+            QWidget* focused = QApplication::focusWidget();
+            if (qobject_cast<QLineEdit*>(focused) || qobject_cast<QAbstractSpinBox*>(focused)) {
+                return;
+            }
+            addCurrentImageToGroup(groupIndex);
+        });
+    }
 
     ui->imageLabel->setMouseTracking(true);
     ui->imageLabel->installEventFilter(this);
@@ -817,6 +853,7 @@ void MainWindow::updateImageInfoDisplay()
 void MainWindow::setupConnections()
 {
     connect(ui->loadImageBtn, &QPushButton::clicked, this, &MainWindow::loadImage);
+    connect(ui->imageGroupsBtn, &QPushButton::clicked, this, &MainWindow::openImageGroupsDialog);
     connect(ui->loadConfigBtn, &QPushButton::clicked, this, &MainWindow::loadConfig);
     connect(ui->saveConfigBtn, &QPushButton::clicked, this, &MainWindow::saveConfig);
     connect(ui->saveAsConfigBtn, &QPushButton::clicked, this, &MainWindow::saveAsConfig);
@@ -2456,6 +2493,624 @@ void MainWindow::onCopyColorClicked()
 
     // 5. 显示成功提示
     ui->statusbar->showMessage(QString("成功: 已复制颜色到剪贴板: %1").arg(colorText), 3000);
+}
+
+QString MainWindow::defaultImageGroupName(int groupIndex) const
+{
+    return QString("图片组 %1").arg(groupIndex + 1);
+}
+
+void MainWindow::addCurrentImageToGroup(int groupIndex)
+{
+    if (groupIndex < 0 || groupIndex >= imageGroups.size()) {
+        return;
+    }
+
+    if (currentImageFileName.isEmpty() || currentImage.isNull()) {
+        ui->statusbar->showMessage("提示: 请先加载图片", 3000);
+        return;
+    }
+
+    const QString absolutePath = QFileInfo(currentImageFileName).absoluteFilePath();
+    if (imageGroups[groupIndex].contains(absolutePath)) {
+        ui->statusbar->showMessage(
+            QString("提示: 当前图片已在%1中").arg(imageGroupNames.value(groupIndex, defaultImageGroupName(groupIndex))),
+            3000);
+        return;
+    }
+
+    imageGroups[groupIndex].append(absolutePath);
+    ui->statusbar->showMessage(
+        QString("成功: 已加入%1 (%2张)")
+            .arg(imageGroupNames.value(groupIndex, defaultImageGroupName(groupIndex)))
+            .arg(imageGroups[groupIndex].size()),
+        3000);
+}
+
+QList<MainWindow::ImageGroupColorRange> MainWindow::calculateImageGroupColorRanges(
+    const QStringList& files,
+    ColorFormat colorFormat,
+    QStringList* failedFiles,
+    QProgressDialog* progress) const
+{
+    QList<ImageGroupColorRange> ranges;
+    if (files.isEmpty() || detectionPoints.isEmpty()) {
+        return ranges;
+    }
+
+    auto componentNamesForFormat = [](ColorFormat format) -> QStringList {
+        switch (format) {
+            case ColorFormat::HSV: return {"H (°)", "S (%)", "V (%)"};
+            case ColorFormat::HSL: return {"H (°)", "S (%)", "L (%)"};
+            case ColorFormat::CMYK: return {"C", "M", "Y", "K"};
+            case ColorFormat::RGB:
+            case ColorFormat::HEX:
+            default: return {"R", "G", "B"};
+        }
+    };
+
+    auto colorValuesForFormat = [this](const QColor& color, ColorFormat format) -> QList<double> {
+        switch (format) {
+            case ColorFormat::HSV:
+                return rgbToHsvValues(color.red(), color.green(), color.blue());
+            case ColorFormat::HSL:
+                return rgbToHslValues(color.red(), color.green(), color.blue());
+            case ColorFormat::CMYK:
+                return rgbToCmykValues(color.red(), color.green(), color.blue());
+            case ColorFormat::RGB:
+            case ColorFormat::HEX:
+            default:
+                return {double(color.red()), double(color.green()), double(color.blue())};
+        }
+    };
+
+    const QStringList componentNames = componentNamesForFormat(colorFormat);
+    if (progress) {
+        progress->setRange(0, files.size() + detectionPoints.size());
+        progress->setValue(0);
+    }
+
+    QVector<QImage> images;
+    images.reserve(files.size());
+    for (int fileIndex = 0; fileIndex < files.size(); ++fileIndex) {
+        const QString& filePath = files[fileIndex];
+        if (progress) {
+            progress->setLabelText(QString("正在加载: %1").arg(QFileInfo(filePath).fileName()));
+            progress->setValue(fileIndex);
+            QApplication::processEvents();
+            if (progress->wasCanceled()) {
+                return ranges;
+            }
+        }
+
+        QImage image(filePath);
+        if (image.isNull()) {
+            if (failedFiles) {
+                failedFiles->append(QFileInfo(filePath).fileName());
+            }
+            continue;
+        }
+        images.append(image);
+    }
+
+    if (images.isEmpty()) {
+        return ranges;
+    }
+
+    for (int pointIndex = 0; pointIndex < detectionPoints.size(); ++pointIndex) {
+        if (progress) {
+            progress->setLabelText(QString("正在计算检测点: %1/%2").arg(pointIndex + 1).arg(detectionPoints.size()));
+            progress->setValue(files.size() + pointIndex);
+            QApplication::processEvents();
+            if (progress->wasCanceled()) {
+                return ranges;
+            }
+        }
+
+        const DetectionPoint& point = detectionPoints[pointIndex];
+        double normX = point.normX;
+        double normY = point.normY;
+        if (!point.hasNormalized) {
+            if (currentImage.isNull()) {
+                continue;
+            }
+            normX = double(point.x) / qMax(1, currentImage.width() - 1);
+            normY = double(point.y) / qMax(1, currentImage.height() - 1);
+        }
+
+        ImageGroupColorRange range;
+        range.pointIndex = pointIndex;
+        range.point = point;
+        range.normX = qBound(0.0, normX, 1.0);
+        range.normY = qBound(0.0, normY, 1.0);
+        range.componentNames = componentNames;
+        QList<double> sums;
+        for (int i = 0; i < componentNames.size(); ++i) {
+            range.minValues.append(std::numeric_limits<double>::max());
+            range.maxValues.append(std::numeric_limits<double>::lowest());
+            sums.append(0.0);
+        }
+
+        for (const QImage& image : images) {
+            const int px = qBound(0, qRound(range.normX * qMax(1, image.width() - 1)), image.width() - 1);
+            const int py = qBound(0, qRound(range.normY * qMax(1, image.height() - 1)), image.height() - 1);
+            const QColor color = image.pixelColor(px, py);
+            const QList<double> values = colorValuesForFormat(color, colorFormat);
+            for (int i = 0; i < values.size() && i < componentNames.size(); ++i) {
+                range.minValues[i] = qMin(range.minValues[i], values[i]);
+                range.maxValues[i] = qMax(range.maxValues[i], values[i]);
+                sums[i] += values[i];
+            }
+            ++range.sampleCount;
+        }
+
+        if (range.sampleCount > 0) {
+            range.avgValues.clear();
+            for (double sum : sums) {
+                range.avgValues.append(sum / range.sampleCount);
+            }
+            ranges.append(range);
+        }
+    }
+
+    if (progress) {
+        progress->setValue(files.size() + detectionPoints.size());
+    }
+
+    return ranges;
+}
+
+bool MainWindow::exportImageGroupCsv(int groupIndex, const QString& filePath, QString* errorMessage) const
+{
+    if (groupIndex < 0 || groupIndex >= imageGroups.size()) {
+        if (errorMessage) *errorMessage = "图片组索引无效";
+        return false;
+    }
+
+    QStringList failedFiles;
+    const ColorFormat colorFormat = getCurrentColorFormat();
+    const CoordinateFormat coordFormat = getCurrentCoordinateFormat();
+    const QList<ImageGroupColorRange> ranges = calculateImageGroupColorRanges(
+        imageGroups[groupIndex], colorFormat, &failedFiles);
+    if (ranges.isEmpty()) {
+        if (errorMessage) *errorMessage = "没有可导出的颜色范围，请确认图片组和检测点不为空";
+        return false;
+    }
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        if (errorMessage) *errorMessage = file.errorString();
+        return false;
+    }
+
+    file.write("\xEF\xBB\xBF");
+    auto writeRow = [&file](const QStringList& values) {
+        QStringList escaped;
+        for (const QString& value : values) {
+            escaped << csvEscape(value);
+        }
+        file.write((escaped.join(',') + "\n").toUtf8());
+    };
+
+    auto formatValue = [this, colorFormat](double value, int componentIndex) -> QString {
+        if (colorFormat == ColorFormat::RGB || colorFormat == ColorFormat::HEX || colorFormat == ColorFormat::CMYK) {
+            if (colorDecimals == 0) {
+                return QString::number(qRound(value));
+            }
+            return QString::number(value, 'f', colorDecimals);
+        }
+
+        if (componentIndex == 0 && colorDecimals == 0) {
+            return QString::number(qRound(value));
+        }
+        return QString::number(value, 'f', qMax(colorDecimals, 1));
+    };
+
+    QStringList header = {
+        "组名", "组序号", "图片数", "失败图片数", "检测点序号",
+        coordFormat == CoordinateFormat::Normalized ? "归一化X" : "像素X",
+        coordFormat == CoordinateFormat::Normalized ? "归一化Y" : "像素Y",
+        "采样数"
+    };
+    for (const QString& componentName : ranges.first().componentNames) {
+        header << QString("%1最小").arg(componentName)
+               << QString("%1最大").arg(componentName)
+               << QString("%1平均").arg(componentName);
+    }
+    writeRow(header);
+
+    const QString groupName = imageGroupNames.value(groupIndex, defaultImageGroupName(groupIndex));
+    const QString groupNumber = QString::number(groupIndex + 1);
+    const QString imageCount = QString::number(imageGroups[groupIndex].size());
+    const QString failedCount = QString::number(failedFiles.size());
+    for (const ImageGroupColorRange& range : ranges) {
+        QStringList row = {
+            groupName,
+            groupNumber,
+            imageCount,
+            failedCount,
+            QString::number(range.pointIndex + 1),
+            coordFormat == CoordinateFormat::Normalized
+                ? QString::number(range.normX, 'f', normalizedDecimals)
+                : QString::number(range.point.x),
+            coordFormat == CoordinateFormat::Normalized
+                ? QString::number(range.normY, 'f', normalizedDecimals)
+                : QString::number(range.point.y),
+            QString::number(range.sampleCount)
+        };
+
+        for (int i = 0; i < range.componentNames.size(); ++i) {
+            row << formatValue(range.minValues.value(i), i)
+                << formatValue(range.maxValues.value(i), i)
+                << formatValue(range.avgValues.value(i), i);
+        }
+        writeRow(row);
+    }
+
+    file.close();
+    return true;
+}
+
+void MainWindow::openImageGroupsDialog()
+{
+    QDialog* dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle("图片组");
+    dialog->resize(900, 600);
+
+    QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
+    QLabel* hintLabel = new QLabel("按 1~9 加入图片组 1~9，按 0 加入图片组 10。", dialog);
+    hintLabel->setStyleSheet("color: #666;");
+    mainLayout->addWidget(hintLabel);
+
+    QSplitter* bodySplitter = new QSplitter(Qt::Horizontal, dialog);
+    mainLayout->addWidget(bodySplitter, 1);
+
+    QListWidget* groupList = new QListWidget(dialog);
+    groupList->setMinimumWidth(100);
+    groupList->setMaximumWidth(320);
+    bodySplitter->addWidget(groupList);
+
+    QWidget* rightPane = new QWidget(dialog);
+    QVBoxLayout* rightLayout = new QVBoxLayout();
+    rightLayout->setContentsMargins(0, 0, 0, 0);
+    rightPane->setLayout(rightLayout);
+    bodySplitter->addWidget(rightPane);
+    bodySplitter->setStretchFactor(0, 0);
+    bodySplitter->setStretchFactor(1, 1);
+    bodySplitter->setSizes({140, 740});
+
+    QHBoxLayout* groupActionsLayout = new QHBoxLayout();
+    QPushButton* renameGroupBtn = new QPushButton("重命名组", dialog);
+    QPushButton* addFilesBtn = new QPushButton("添加图片", dialog);
+    QPushButton* removeFileBtn = new QPushButton("删除选中", dialog);
+    QPushButton* clearGroupBtn = new QPushButton("清空组", dialog);
+    QPushButton* openFileBtn = new QPushButton("打开图片", dialog);
+    QPushButton* locateFileBtn = new QPushButton("定位图片", dialog);
+    groupActionsLayout->addWidget(renameGroupBtn);
+    groupActionsLayout->addWidget(addFilesBtn);
+    groupActionsLayout->addWidget(removeFileBtn);
+    groupActionsLayout->addWidget(clearGroupBtn);
+    groupActionsLayout->addWidget(openFileBtn);
+    groupActionsLayout->addWidget(locateFileBtn);
+    rightLayout->addLayout(groupActionsLayout);
+
+    QListWidget* imageList = new QListWidget(dialog);
+    imageList->setAlternatingRowColors(true);
+    imageList->setViewMode(QListView::IconMode);
+    imageList->setIconSize(QSize(96, 72));
+    imageList->setGridSize(QSize(140, 118));
+    imageList->setResizeMode(QListView::Adjust);
+    imageList->setMovement(QListView::Static);
+    imageList->setWrapping(true);
+    imageList->setWordWrap(true);
+    imageList->setUniformItemSizes(true);
+    rightLayout->addWidget(imageList, 1);
+
+    QLabel* rangeInfoLabel = new QLabel(dialog);
+    rangeInfoLabel->setStyleSheet("color: #666;");
+    rightLayout->addWidget(rangeInfoLabel);
+
+    QTableWidget* rangeTable = new QTableWidget(dialog);
+    rangeTable->horizontalHeader()->setStretchLastSection(true);
+    rangeTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    rangeTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    rangeTable->verticalHeader()->setVisible(false);
+    rightLayout->addWidget(rangeTable, 1);
+
+    QHBoxLayout* bottomLayout = new QHBoxLayout();
+    QPushButton* exportCsvBtn = new QPushButton("导出 CSV", dialog);
+    QPushButton* closeBtn = new QPushButton("关闭", dialog);
+    bottomLayout->addStretch();
+    bottomLayout->addWidget(exportCsvBtn);
+    bottomLayout->addWidget(closeBtn);
+    mainLayout->addLayout(bottomLayout);
+
+    auto selectedGroupIndex = [this, groupList]() -> int {
+        const int row = groupList->currentRow();
+        return (row < 0 || row >= imageGroups.size()) ? 0 : row;
+    };
+
+    auto refreshGroups = std::make_shared<std::function<void()>>();
+    auto refreshImages = std::make_shared<std::function<void()>>();
+    auto refreshRanges = std::make_shared<std::function<void()>>();
+    auto refreshAll = std::make_shared<std::function<void()>>();
+
+    *refreshGroups = [this, groupList, selectedGroupIndex]() {
+        const int currentRow = selectedGroupIndex();
+        groupList->blockSignals(true);
+        groupList->clear();
+        for (int i = 0; i < imageGroups.size(); ++i) {
+            groupList->addItem(QString("%1 (%2张)")
+                                   .arg(imageGroupNames.value(i, defaultImageGroupName(i)))
+                                   .arg(imageGroups[i].size()));
+        }
+        groupList->setCurrentRow(qBound(0, currentRow, imageGroups.size() - 1));
+        groupList->blockSignals(false);
+    };
+
+    *refreshImages = [this, imageList, selectedGroupIndex]() {
+        imageList->clear();
+        const int groupIndex = selectedGroupIndex();
+        for (const QString& filePath : imageGroups[groupIndex]) {
+            const QFileInfo fileInfo(filePath);
+            QPixmap thumbnail(96, 72);
+            thumbnail.fill(Qt::transparent);
+            if (fileInfo.exists()) {
+                QPixmap source(filePath);
+                if (!source.isNull()) {
+                    thumbnail = source.scaled(96, 72, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                }
+            }
+
+            QListWidgetItem* item = new QListWidgetItem(QIcon(thumbnail), fileInfo.fileName(), imageList);
+            item->setToolTip(filePath);
+            item->setData(Qt::UserRole, filePath);
+            item->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);
+            if (!fileInfo.exists()) {
+                item->setText(item->text() + " (不存在)");
+                item->setForeground(Qt::red);
+            }
+        }
+    };
+
+    *refreshRanges = [this, dialog, rangeTable, rangeInfoLabel, selectedGroupIndex]() {
+        const int pointSelectionToRestore = selectedPointIndex;
+        rangeTable->setRowCount(0);
+        const int groupIndex = selectedGroupIndex();
+        const ColorFormat colorFormat = getCurrentColorFormat();
+        const CoordinateFormat coordFormat = getCurrentCoordinateFormat();
+        QStringList failedFiles;
+
+        QProgressDialog progress("正在计算图片组颜色范围...", "取消", 0, 0, dialog);
+        progress.setWindowModality(Qt::WindowModal);
+        progress.setMinimumDuration(300);
+
+        const QList<ImageGroupColorRange> ranges = calculateImageGroupColorRanges(
+            imageGroups[groupIndex], colorFormat, &failedFiles, &progress);
+
+        rangeInfoLabel->setText(QString("检测点: %1，图片: %2，失败: %3，颜色格式: %4，坐标格式: %5")
+                                    .arg(detectionPoints.size())
+                                    .arg(imageGroups[groupIndex].size())
+                                    .arg(failedFiles.size())
+                                    .arg(ui->colorFormatCombo->currentText())
+                                    .arg(ui->coordinateFormatCombo->currentText()));
+        if (!failedFiles.isEmpty()) {
+            rangeInfoLabel->setToolTip(failedFiles.join("\n"));
+        } else {
+            rangeInfoLabel->setToolTip("");
+        }
+
+        QStringList headers = {
+            "点",
+            coordFormat == CoordinateFormat::Normalized ? "归一化X" : "X",
+            coordFormat == CoordinateFormat::Normalized ? "归一化Y" : "Y",
+            "采样数"
+        };
+        if (!ranges.isEmpty()) {
+            for (const QString& componentName : ranges.first().componentNames) {
+                headers << QString("%1范围").arg(componentName)
+                        << QString("%1平均").arg(componentName);
+            }
+        }
+        rangeTable->setColumnCount(headers.size());
+        rangeTable->setHorizontalHeaderLabels(headers);
+        rangeTable->setRowCount(ranges.size());
+
+        auto formatValue = [this, colorFormat](double value, int componentIndex) -> QString {
+            if (colorFormat == ColorFormat::RGB || colorFormat == ColorFormat::HEX || colorFormat == ColorFormat::CMYK) {
+                if (colorDecimals == 0) {
+                    return QString::number(qRound(value));
+                }
+                return QString::number(value, 'f', colorDecimals);
+            }
+
+            if (componentIndex == 0 && colorDecimals == 0) {
+                return QString::number(qRound(value));
+            }
+            return QString::number(value, 'f', qMax(colorDecimals, 1));
+        };
+
+        for (int row = 0; row < ranges.size(); ++row) {
+            const ImageGroupColorRange& range = ranges[row];
+            QTableWidgetItem* pointItem = new QTableWidgetItem(QString::number(range.pointIndex + 1));
+            pointItem->setData(Qt::UserRole, range.pointIndex);
+            rangeTable->setItem(row, 0, pointItem);
+            rangeTable->setItem(row, 1, new QTableWidgetItem(
+                coordFormat == CoordinateFormat::Normalized
+                    ? QString::number(range.normX, 'f', normalizedDecimals)
+                    : QString::number(range.point.x)));
+            rangeTable->setItem(row, 2, new QTableWidgetItem(
+                coordFormat == CoordinateFormat::Normalized
+                    ? QString::number(range.normY, 'f', normalizedDecimals)
+                    : QString::number(range.point.y)));
+            rangeTable->setItem(row, 3, new QTableWidgetItem(QString::number(range.sampleCount)));
+
+            int col = 4;
+            for (int i = 0; i < range.componentNames.size(); ++i) {
+                const QString rangeText = QString("%1 ~ %2")
+                    .arg(formatValue(range.minValues.value(i), i))
+                    .arg(formatValue(range.maxValues.value(i), i));
+                rangeTable->setItem(row, col++, new QTableWidgetItem(rangeText));
+                rangeTable->setItem(row, col++, new QTableWidgetItem(formatValue(range.avgValues.value(i), i)));
+            }
+
+            if (range.pointIndex == pointSelectionToRestore) {
+                rangeTable->setCurrentCell(row, 0);
+            }
+        }
+        rangeTable->resizeColumnsToContents();
+    };
+
+    *refreshAll = [refreshGroups, refreshImages, refreshRanges]() {
+        (*refreshGroups)();
+        (*refreshImages)();
+        (*refreshRanges)();
+    };
+
+    connect(groupList, &QListWidget::currentRowChanged, dialog, [refreshImages, refreshRanges](int) {
+        (*refreshImages)();
+        (*refreshRanges)();
+    });
+
+    connect(renameGroupBtn, &QPushButton::clicked, dialog, [=]() {
+        const int groupIndex = selectedGroupIndex();
+        bool ok = false;
+        const QString name = QInputDialog::getText(
+            dialog,
+            "重命名图片组",
+            "组名:",
+            QLineEdit::Normal,
+            imageGroupNames.value(groupIndex, defaultImageGroupName(groupIndex)),
+            &ok);
+        if (ok && !name.trimmed().isEmpty()) {
+            imageGroupNames[groupIndex] = name.trimmed();
+            (*refreshAll)();
+        }
+    });
+
+    connect(addFilesBtn, &QPushButton::clicked, dialog, [=]() {
+        const int groupIndex = selectedGroupIndex();
+        const QStringList files = QFileDialog::getOpenFileNames(
+            dialog,
+            "添加图片到图片组",
+            currentImageFileName.isEmpty() ? QString() : QFileInfo(currentImageFileName).absolutePath(),
+            "图片文件 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.gif *.webp *.jfif *.pbm *.pgm *.ppm *.xpm);;所有文件 (*.*)");
+        for (const QString& filePath : files) {
+            const QString absolutePath = QFileInfo(filePath).absoluteFilePath();
+            if (!imageGroups[groupIndex].contains(absolutePath)) {
+                imageGroups[groupIndex].append(absolutePath);
+            }
+        }
+        (*refreshAll)();
+    });
+
+    connect(removeFileBtn, &QPushButton::clicked, dialog, [=]() {
+        const int groupIndex = selectedGroupIndex();
+        QListWidgetItem* item = imageList->currentItem();
+        if (!item) {
+            return;
+        }
+        imageGroups[groupIndex].removeAll(item->data(Qt::UserRole).toString());
+        (*refreshAll)();
+    });
+
+    connect(clearGroupBtn, &QPushButton::clicked, dialog, [=]() {
+        const int groupIndex = selectedGroupIndex();
+        if (imageGroups[groupIndex].isEmpty()) {
+            return;
+        }
+        const auto result = QMessageBox::question(
+            dialog,
+            "确认清空",
+            QString("确定要清空%1吗?").arg(imageGroupNames.value(groupIndex, defaultImageGroupName(groupIndex))),
+            QMessageBox::Yes | QMessageBox::No);
+        if (result == QMessageBox::Yes) {
+            imageGroups[groupIndex].clear();
+            (*refreshAll)();
+        }
+    });
+
+    connect(openFileBtn, &QPushButton::clicked, dialog, [imageList]() {
+        QListWidgetItem* item = imageList->currentItem();
+        if (!item) {
+            return;
+        }
+        QDesktopServices::openUrl(QUrl::fromLocalFile(item->data(Qt::UserRole).toString()));
+    });
+
+    connect(locateFileBtn, &QPushButton::clicked, dialog, [imageList]() {
+        QListWidgetItem* item = imageList->currentItem();
+        if (!item) {
+            return;
+        }
+        const QString filePath = item->data(Qt::UserRole).toString();
+#ifdef Q_OS_WIN
+        QProcess::startDetached("explorer.exe", {QString("/select,%1").arg(QDir::toNativeSeparators(filePath))});
+#else
+        QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(filePath).absolutePath()));
+#endif
+    });
+
+    connect(rangeTable, &QTableWidget::itemSelectionChanged, dialog, [this, rangeTable]() {
+        QList<QTableWidgetItem*> selectedItems = rangeTable->selectedItems();
+        if (selectedItems.isEmpty()) {
+            return;
+        }
+
+        const int row = selectedItems.first()->row();
+        QTableWidgetItem* pointItem = rangeTable->item(row, 0);
+        if (!pointItem) {
+            return;
+        }
+
+        const int pointIndex = pointItem->data(Qt::UserRole).toInt();
+        if (pointIndex >= 0 && pointIndex < ui->pointsList->count()) {
+            ui->pointsList->setCurrentRow(pointIndex);
+            ui->pointsList->scrollToItem(ui->pointsList->item(pointIndex));
+        }
+    });
+
+    connect(ui->pointsList, &QListWidget::itemSelectionChanged, dialog, [this, rangeTable]() {
+        if (selectedPointIndex < 0) {
+            rangeTable->clearSelection();
+            return;
+        }
+
+        for (int row = 0; row < rangeTable->rowCount(); ++row) {
+            QTableWidgetItem* pointItem = rangeTable->item(row, 0);
+            if (pointItem && pointItem->data(Qt::UserRole).toInt() == selectedPointIndex) {
+                if (rangeTable->currentRow() != row) {
+                    rangeTable->setCurrentCell(row, 0);
+                }
+                rangeTable->scrollToItem(pointItem);
+                return;
+            }
+        }
+    });
+
+    connect(exportCsvBtn, &QPushButton::clicked, dialog, [=]() {
+        const int groupIndex = selectedGroupIndex();
+        const QString defaultName = QString("color_range_group_%1.csv").arg(groupIndex + 1);
+        const QString filePath = QFileDialog::getSaveFileName(dialog, "导出颜色范围 CSV", defaultName, "CSV Files (*.csv)");
+        if (filePath.isEmpty()) {
+            return;
+        }
+
+        QString errorMessage;
+        if (exportImageGroupCsv(groupIndex, filePath, &errorMessage)) {
+            QMessageBox::information(dialog, "导出 CSV", "颜色范围已导出。");
+        } else {
+            QMessageBox::warning(dialog, "导出 CSV", errorMessage);
+        }
+    });
+
+    connect(closeBtn, &QPushButton::clicked, dialog, &QDialog::close);
+
+    (*refreshAll)();
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
 }
 
 void MainWindow::loadFolder()

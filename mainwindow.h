@@ -11,6 +11,7 @@
 #include <QSplitter>
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QVector>
 
 class MinimapWidget;
 
@@ -24,6 +25,7 @@ QT_END_NAMESPACE
 class QPropertyAnimation;
 class QShortcut;
 class QPoint;
+class QProgressDialog;
 
 enum class ColorFormat {
     RGB,
@@ -133,6 +135,7 @@ private slots:
     void onCopyImageClicked();
     void onCopyImageFileClicked();
     void onRenameImageFileClicked();
+    void openImageGroupsDialog();
 
 signals:
     void currentZoomChanged(double newZoom);
@@ -158,6 +161,21 @@ private:
     QStringList imageFileList;      // 所有图片文件路径列表
     int currentImageIndex = -1;     // 当前图片索引（-1表示单张图片模式）
     QString currentFolderPath;      // 当前打开的文件夹路径
+
+    struct ImageGroupColorRange {
+        int pointIndex = -1;
+        DetectionPoint point;
+        double normX = 0.0;
+        double normY = 0.0;
+        int sampleCount = 0;
+        QStringList componentNames;
+        QList<double> minValues;
+        QList<double> maxValues;
+        QList<double> avgValues;
+    };
+
+    QVector<QStringList> imageGroups;
+    QStringList imageGroupNames;
 
     // Drag functionality
     bool isDragging = false;
@@ -249,10 +267,20 @@ private:
     QShortcut* actualSizeShortcut = nullptr;
     QShortcut* deletePointShortcut = nullptr;
     QShortcut* renameImageShortcut = nullptr;
+    QVector<QShortcut*> imageGroupShortcuts;
     void setCurrentZoom(double zoom);
     void animatedZoomTo(double targetZoom, const QPoint& centerPos = QPoint());
     void setupZoomAnimation();
     void updatePointsListHeight();
+
+    QString defaultImageGroupName(int groupIndex) const;
+    void addCurrentImageToGroup(int groupIndex);
+    QList<ImageGroupColorRange> calculateImageGroupColorRanges(
+        const QStringList& files,
+        ColorFormat colorFormat,
+        QStringList* failedFiles,
+        QProgressDialog* progress = nullptr) const;
+    bool exportImageGroupCsv(int groupIndex, const QString& filePath, QString* errorMessage) const;
 
     // Minimap
     MinimapWidget* minimapWidget = nullptr;

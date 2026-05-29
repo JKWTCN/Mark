@@ -386,7 +386,7 @@
           <item row="3" column="0" colspan="2">
            <widget class="QPushButton" name="openInExplorerBtn">
             <property name="text">
-             <string>系统默认打开方式</string>
+             <string>打开图片</string>
             </property>
             <property name="enabled">
              <bool>false</bool>
@@ -399,7 +399,7 @@
           <item row="3" column="2" colspan="2">
            <widget class="QPushButton" name="selectInExplorerBtn">
             <property name="text">
-             <string>在资源管理器中选中</string>
+             <string>定位图片</string>
             </property>
             <property name="enabled">
              <bool>false</bool>
@@ -432,6 +432,16 @@
             </property>
             <property name="toolTip">
              <string>复制图片文件到剪贴板，可在资源管理器中粘贴</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0" colspan="4">
+           <widget class="QPushButton" name="imageGroupsBtn">
+            <property name="text">
+             <string>图片组...</string>
+            </property>
+            <property name="toolTip">
+             <string>管理按 1~0 记录的图片组，并导出检测点颜色范围 CSV</string>
             </property>
            </widget>
           </item>
