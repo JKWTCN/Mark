@@ -512,6 +512,16 @@
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
+           <widget class="QLineEdit" name="pointSearchEdit">
+            <property name="placeholderText">
+             <string>搜索序号/坐标/颜色</string>
+            </property>
+            <property name="clearButtonEnabled">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QListWidget" name="pointsList"/>
           </item>
           <item>

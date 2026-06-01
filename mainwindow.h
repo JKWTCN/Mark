@@ -184,12 +184,16 @@ private:
 
     // Selected point index in the list (-1 means no selection)
     int selectedPointIndex = -1;
+    QString pointSearchText;
 
     // Current config file path (empty if not loaded/saved yet)
     QString currentConfigFilePath;
 
     void setupConnections();
     void updatePointsList();
+    void applyPointSearchFilter();
+    QString pointSearchHaystack(int pointIndex);
+    void focusDetectionPoint(int pointIndex, bool centerImage);
     void addDetectionPoint(const QPoint& pos);
     QColor getPixelColor(const QPoint& pos) const;
     void drawDetectionPoints();
@@ -267,6 +271,7 @@ private:
     QShortcut* actualSizeShortcut = nullptr;
     QShortcut* deletePointShortcut = nullptr;
     QShortcut* renameImageShortcut = nullptr;
+    QShortcut* pointSearchShortcut = nullptr;
     QVector<QShortcut*> imageGroupShortcuts;
     void setCurrentZoom(double zoom);
     void animatedZoomTo(double targetZoom, const QPoint& centerPos = QPoint());

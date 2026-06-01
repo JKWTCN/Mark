@@ -146,6 +146,12 @@ MainWindow::MainWindow(QWidget *parent)
     renameImageShortcut->setEnabled(false);
     connect(renameImageShortcut, &QShortcut::activated, this, &MainWindow::onRenameImageFileClicked);
 
+    pointSearchShortcut = new QShortcut(QKeySequence::Find, this);
+    connect(pointSearchShortcut, &QShortcut::activated, this, [this]() {
+        ui->pointSearchEdit->setFocus();
+        ui->pointSearchEdit->selectAll();
+    });
+
     for (int i = 0; i < 10; ++i) {
         const int groupIndex = (i == 9) ? 9 : i;
         const int key = (i == 9) ? Qt::Key_0 : Qt::Key_1 + i;
@@ -870,6 +876,10 @@ void MainWindow::setupConnections()
         this->onPointsListItemDoubleClicked(item);
     });
     connect(ui->pointsList, &QListWidget::itemSelectionChanged, this, &MainWindow::onPointsListSelectionChanged);
+    connect(ui->pointSearchEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
+        pointSearchText = text.trimmed();
+        applyPointSearchFilter();
+    });
     connect(ui->zoomInBtn, &QPushButton::clicked, this, &MainWindow::zoomIn);
     connect(ui->zoomOutBtn, &QPushButton::clicked, this, &MainWindow::zoomOut);
     connect(ui->zoomSlider, &QSlider::valueChanged, this, &MainWindow::zoomChanged);
@@ -1198,7 +1208,8 @@ void MainWindow::updatePointsList()
             }
             coordText = QString("(%1, %2)").arg(point.x).arg(point.y);
         }
-        QString text = QString("%1 %2")
+        QString text = QString("#%1 %2 %3")
+            .arg(i + 1)
             .arg(coordText)
             .arg(colorText);
 
@@ -1219,8 +1230,135 @@ void MainWindow::updatePointsList()
     }
     ui->pointsList->blockSignals(false);
 
+    applyPointSearchFilter();
+
     // 更新列表高度
     updatePointsListHeight();
+}
+
+QString MainWindow::pointSearchHaystack(int pointIndex)
+{
+    if (pointIndex < 0 || pointIndex >= detectionPoints.size()) {
+        return QString();
+    }
+
+    const DetectionPoint& point = detectionPoints[pointIndex];
+    QStringList parts;
+    parts << QString::number(pointIndex + 1)
+          << QString("#%1").arg(pointIndex + 1)
+          << QString("%1,%2").arg(point.x).arg(point.y)
+          << QString("%1, %2").arg(point.x).arg(point.y)
+          << QString("(%1, %2)").arg(point.x).arg(point.y)
+          << QString("rgb(%1,%2,%3)").arg(point.r).arg(point.g).arg(point.b)
+          << QString("rgb(%1, %2, %3)").arg(point.r).arg(point.g).arg(point.b)
+          << rgbToHex(point.r, point.g, point.b)
+          << formatColorToString(point.r, point.g, point.b, getCurrentColorFormat());
+
+    if (!currentImage.isNull() || point.hasNormalized) {
+        double normX = point.normX;
+        double normY = point.normY;
+        if (!point.isNormalizedPrimary() && !currentImage.isNull()) {
+            normX = double(point.x) / qMax(1, currentImage.width() - 1);
+            normY = double(point.y) / qMax(1, currentImage.height() - 1);
+        }
+
+        parts << QString("%1,%2")
+                     .arg(QString::number(normX, 'f', normalizedDecimals))
+                     .arg(QString::number(normY, 'f', normalizedDecimals))
+              << QString("%1, %2")
+                     .arg(QString::number(normX, 'f', normalizedDecimals))
+                     .arg(QString::number(normY, 'f', normalizedDecimals))
+              << QString("(%1, %2)")
+                     .arg(QString::number(normX, 'f', normalizedDecimals))
+                     .arg(QString::number(normY, 'f', normalizedDecimals))
+              << QString::number(normX, 'f', 8)
+              << QString::number(normY, 'f', 8);
+    }
+
+    QListWidgetItem* item = ui->pointsList->item(pointIndex);
+    if (item) {
+        parts << item->text();
+    }
+
+    return parts.join(' ').toLower();
+}
+
+void MainWindow::applyPointSearchFilter()
+{
+    const QString query = pointSearchText.trimmed().toLower();
+    int firstMatch = -1;
+    int matchCount = 0;
+
+    ui->pointsList->blockSignals(true);
+    for (int row = 0; row < ui->pointsList->count(); ++row) {
+        QListWidgetItem* item = ui->pointsList->item(row);
+        if (!item) {
+            continue;
+        }
+
+        const int pointIndex = item->data(Qt::UserRole).toInt();
+        const bool matches = query.isEmpty() || pointSearchHaystack(pointIndex).contains(query);
+        item->setHidden(!matches);
+
+        if (matches) {
+            ++matchCount;
+            if (firstMatch < 0) {
+                firstMatch = row;
+            }
+        }
+    }
+
+    if (query.isEmpty()) {
+        if (selectedPointIndex >= 0 && selectedPointIndex < ui->pointsList->count()) {
+            ui->pointsList->setCurrentRow(selectedPointIndex);
+        }
+    } else if (firstMatch >= 0) {
+        ui->pointsList->setCurrentRow(firstMatch);
+    } else {
+        ui->pointsList->clearSelection();
+        ui->pointsList->setCurrentRow(-1);
+        selectedPointIndex = -1;
+    }
+    ui->pointsList->blockSignals(false);
+
+    if (!query.isEmpty() && firstMatch >= 0) {
+        focusDetectionPoint(ui->pointsList->item(firstMatch)->data(Qt::UserRole).toInt(), true);
+        ui->statusbar->showMessage(QString("找到 %1 个匹配的检测点").arg(matchCount), 2000);
+    } else if (!query.isEmpty()) {
+        drawDetectionPoints();
+        ui->statusbar->showMessage("未找到匹配的检测点", 3000);
+    } else {
+        drawDetectionPoints();
+    }
+}
+
+void MainWindow::focusDetectionPoint(int pointIndex, bool centerImage)
+{
+    if (pointIndex < 0 || pointIndex >= detectionPoints.size()) {
+        return;
+    }
+
+    selectedPointIndex = pointIndex;
+    QListWidgetItem* item = ui->pointsList->item(pointIndex);
+    if (item) {
+        ui->pointsList->setCurrentItem(item);
+        ui->pointsList->scrollToItem(item);
+    }
+
+    if (centerImage && !currentImage.isNull()) {
+        const DetectionPoint& point = detectionPoints[pointIndex];
+        QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
+        QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
+        const QSize viewportSize = ui->scrollArea->viewport()->size();
+
+        const int targetH = qRound(point.x * m_currentZoom - viewportSize.width() / 2.0);
+        const int targetV = qRound(point.y * m_currentZoom - viewportSize.height() / 2.0);
+
+        hBar->setValue(qBound(hBar->minimum(), targetH, hBar->maximum()));
+        vBar->setValue(qBound(vBar->minimum(), targetV, vBar->maximum()));
+    }
+
+    drawDetectionPoints();
 }
 
 void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
@@ -2225,7 +2363,7 @@ void MainWindow::onPointsListSelectionChanged()
     if (selectedItems.isEmpty()) {
         selectedPointIndex = -1;
     } else {
-        selectedPointIndex = ui->pointsList->row(selectedItems.first());
+        selectedPointIndex = selectedItems.first()->data(Qt::UserRole).toInt();
     }
     drawDetectionPoints();
 }
