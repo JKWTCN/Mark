@@ -958,11 +958,23 @@ void MainWindow::loadImage()
     }
 }
 
-bool MainWindow::loadImageFile(const QString& filePath)
+bool MainWindow::loadImageFile(const QString& filePath, bool keepFolderNavigation)
 {
     QFileInfo fileInfo(filePath);
     if (!fileInfo.isFile() || !isSupportedImageFile(fileInfo)) {
         return false;
+    }
+
+    const QString absoluteFilePath = fileInfo.absoluteFilePath();
+
+    const bool hasFolderNavigation = keepFolderNavigation && !imageFileList.isEmpty();
+
+    if (hasFolderNavigation) {
+        const int existingIndex = imageFileList.indexOf(absoluteFilePath);
+        if (existingIndex >= 0) {
+            loadImageAtIndex(existingIndex);
+            return true;
+        }
     }
 
     // Stop any running animation when switching images
@@ -970,8 +982,8 @@ bool MainWindow::loadImageFile(const QString& filePath)
         zoomAnimation->stop();
     }
 
-    // 清空文件夹模式，切换回单张图片模式
-    if (!imageFileList.isEmpty()) {
+    // 清空文件夹模式，切换回单张图片模式；拖放临时预览时保留原文件夹导航
+    if (!imageFileList.isEmpty() && !hasFolderNavigation) {
         imageFileList.clear();
         currentImageIndex = -1;
         updateNavigationButtons();
@@ -984,13 +996,13 @@ bool MainWindow::loadImageFile(const QString& filePath)
     int oldHScroll = hBar->value();
     int oldVScroll = vBar->value();
 
-    currentImage.load(filePath);
+    currentImage.load(absoluteFilePath);
     if (currentImage.isNull()) {
         return false;
     }
 
     // 保存图片文件信息
-    currentImageFileName = filePath;
+    currentImageFileName = absoluteFilePath;
     currentImageFileSize = fileInfo.size();
 
     ui->imageLabel->setText("");
@@ -1833,7 +1845,7 @@ void MainWindow::dropEvent(QDropEvent *event)
                 return;
             }
 
-            if (loadImageFile(path)) {
+            if (loadImageFile(path, true)) {
                 event->acceptProposedAction();
                 return;
             }
