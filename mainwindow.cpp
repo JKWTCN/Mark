@@ -45,11 +45,17 @@
 #include <QTextStream>
 #include <QAbstractSpinBox>
 #include <QApplication>
+#include <QSettings>
 #include <limits>
 #include <functional>
 #include <memory>
 
 namespace {
+constexpr const char* kSettingsOrganization = "Mark";
+constexpr const char* kSettingsApplication = "Mark";
+constexpr const char* kLastImageFolderPathKey = "paths/lastImageFolder";
+constexpr const char* kLastConfigFilePathKey = "paths/lastConfigFile";
+
 bool isSupportedImageFile(const QFileInfo& fileInfo)
 {
     const QString suffix = fileInfo.suffix().toLower();
@@ -65,6 +71,36 @@ QString csvEscape(const QString& value)
         return "\"" + escaped + "\"";
     }
     return escaped;
+}
+
+QSettings appSettings()
+{
+    return QSettings(kSettingsOrganization, kSettingsApplication);
+}
+
+QString existingDirectoryOrEmpty(const QString& path)
+{
+    if (path.isEmpty()) {
+        return "";
+    }
+
+    const QFileInfo info(path);
+    return info.exists() && info.isDir() ? info.absoluteFilePath() : "";
+}
+
+QString configDialogStartPath(const QString& path)
+{
+    if (path.isEmpty()) {
+        return "";
+    }
+
+    const QFileInfo info(path);
+    if (info.exists()) {
+        return info.absoluteFilePath();
+    }
+
+    const QFileInfo parent(info.absolutePath());
+    return parent.exists() && parent.isDir() ? parent.absoluteFilePath() : "";
 }
 }
 
@@ -1779,6 +1815,7 @@ void MainWindow::dropEvent(QDropEvent *event)
 
             if (fileInfo.isDir()) {
                 if (loadImageFolder(path)) {
+                    appSettings().setValue(kLastImageFolderPathKey, fileInfo.absoluteFilePath());
                     ui->statusbar->showMessage("成功: 文件夹已加载", 3000);
                 }
                 event->acceptProposedAction();
@@ -1787,6 +1824,7 @@ void MainWindow::dropEvent(QDropEvent *event)
 
             if (fileInfo.suffix().compare("json", Qt::CaseInsensitive) == 0) {
                 if (loadJsonConfig(path)) {
+                    appSettings().setValue(kLastConfigFilePathKey, fileInfo.absoluteFilePath());
                     ui->statusbar->showMessage("成功: 配置已加载", 3000);
                 } else {
                     ui->statusbar->showMessage("错误: 加载配置失败，请检查文件格式", 3000);
@@ -1932,6 +1970,7 @@ void MainWindow::saveAsConfig()
     if (!fileName.isEmpty()) {
         if (saveJsonConfig(fileName)) {
             currentConfigFilePath = fileName;
+            appSettings().setValue(kLastConfigFilePathKey, QFileInfo(fileName).absoluteFilePath());
             ui->statusbar->showMessage("成功: 配置已保存到: " + fileName, 3000);
         } else {
             ui->statusbar->showMessage("错误: 保存配置失败", 3000);
@@ -2113,8 +2152,16 @@ bool MainWindow::loadJsonConfig(const QString& filePath)
 
 void MainWindow::loadConfig()
 {
-    QString fileName = QFileDialog::getOpenFileName(this, "加载配置", "", "JSON Files (*.json)");
+    const QString lastConfigPath = currentConfigFilePath.isEmpty()
+        ? appSettings().value(kLastConfigFilePathKey).toString()
+        : currentConfigFilePath;
+    QString fileName = QFileDialog::getOpenFileName(
+        this,
+        "加载配置",
+        configDialogStartPath(lastConfigPath),
+        "JSON Files (*.json)");
     if (!fileName.isEmpty()) {
+        appSettings().setValue(kLastConfigFilePathKey, QFileInfo(fileName).absoluteFilePath());
         if (loadJsonConfig(fileName)) {
             ui->statusbar->showMessage("成功: 配置已加载", 3000);
         } else {
@@ -3253,16 +3300,22 @@ void MainWindow::openImageGroupsDialog()
 
 void MainWindow::loadFolder()
 {
+    const QString rememberedFolderPath = existingDirectoryOrEmpty(
+        appSettings().value(kLastImageFolderPathKey).toString());
+    const QString startFolderPath = currentFolderPath.isEmpty()
+        ? rememberedFolderPath
+        : currentFolderPath;
     QString folderPath = QFileDialog::getExistingDirectory(
         this,
         "选择包含图片的文件夹",
-        currentFolderPath.isEmpty() ? "" : currentFolderPath
+        startFolderPath
     );
 
     if (folderPath.isEmpty()) {
         return;  // 用户取消选择
     }
 
+    appSettings().setValue(kLastImageFolderPathKey, QFileInfo(folderPath).absoluteFilePath());
     if (!loadImageFolder(folderPath)) {
         ui->statusbar->showMessage("警告: 所选文件夹中没有支持的图片文件", 3000);
     }
