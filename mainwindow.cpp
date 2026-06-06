@@ -1068,29 +1068,17 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
         // Check if this was a click (small movement)
         QPoint delta = event->globalPos() - dragStartPos;
         if (delta.manhattanLength() < 5) {
-            // This was a click, add detection point
+            // This was a click, add or move a detection point
             if (ui->imageLabel->underMouse()) {
-                QPoint labelPos = ui->imageLabel->mapFromGlobal(event->globalPos());
-                QSize imageSize = currentImage.size();
-
-                int imageX, imageY;
-                QPixmap pixmap = ui->imageLabel->pixmap();
-                if (!pixmap.isNull()) {
-                    QSize scaledSize = pixmap.size();
-                    double scaleX = (double)imageSize.width() / scaledSize.width();
-                    double scaleY = (double)imageSize.height() / scaledSize.height();
-                    int offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
-                    int offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
-                    imageX = (labelPos.x() - offsetX) * scaleX;
-                    imageY = (labelPos.y() - offsetY) * scaleY;
-                } else {
-                    imageX = static_cast<int>(labelPos.x() / m_currentZoom);
-                    imageY = static_cast<int>(labelPos.y() / m_currentZoom);
-                }
-
-                if (imageX >= 0 && imageX < imageSize.width() &&
-                    imageY >= 0 && imageY < imageSize.height()) {
-                    addDetectionPoint(QPoint(imageX, imageY));
+                QPoint imagePos;
+                if (imagePointFromGlobalPosition(event->globalPos(), &imagePos)) {
+                    if (isPickingPointCoordinate) {
+                        confirmPointCoordinatePick(imagePos);
+                    } else {
+                        addDetectionPoint(imagePos);
+                    }
+                } else if (isPickingPointCoordinate) {
+                    ui->statusbar->showMessage("提示: 请点击图片范围内的位置", 3000);
                 }
             }
         }
@@ -1409,6 +1397,126 @@ void MainWindow::focusDetectionPoint(int pointIndex, bool centerImage)
     drawDetectionPoints();
 }
 
+bool MainWindow::imagePointFromGlobalPosition(const QPoint& globalPos, QPoint* imagePos) const
+{
+    if (!imagePos || currentImage.isNull()) {
+        return false;
+    }
+
+    const QPoint labelPos = ui->imageLabel->mapFromGlobal(globalPos);
+    const QSize imageSize = currentImage.size();
+
+    int imageX = 0;
+    int imageY = 0;
+    QPixmap pixmap = ui->imageLabel->pixmap();
+    if (!pixmap.isNull()) {
+        const QSize scaledSize = pixmap.size();
+        if (scaledSize.isEmpty()) {
+            return false;
+        }
+
+        const double scaleX = static_cast<double>(imageSize.width()) / scaledSize.width();
+        const double scaleY = static_cast<double>(imageSize.height()) / scaledSize.height();
+        const int offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
+        const int offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
+        imageX = static_cast<int>((labelPos.x() - offsetX) * scaleX);
+        imageY = static_cast<int>((labelPos.y() - offsetY) * scaleY);
+    } else {
+        imageX = static_cast<int>(labelPos.x() / m_currentZoom);
+        imageY = static_cast<int>(labelPos.y() / m_currentZoom);
+    }
+
+    if (imageX < 0 || imageX >= imageSize.width() ||
+        imageY < 0 || imageY >= imageSize.height()) {
+        return false;
+    }
+
+    *imagePos = QPoint(imageX, imageY);
+    return true;
+}
+
+void MainWindow::startPointCoordinatePick(int pointIndex)
+{
+    if (currentImage.isNull()) {
+        ui->statusbar->showMessage("错误: 请先加载图片", 3000);
+        return;
+    }
+
+    if (pointIndex < 0 || pointIndex >= detectionPoints.size()) {
+        ui->statusbar->showMessage("错误: 检测点索引无效", 3000);
+        return;
+    }
+
+    isPickingPointCoordinate = true;
+    pickingPointIndex = pointIndex;
+    focusDetectionPoint(pointIndex, true);
+    ui->statusbar->showMessage(QString("请在图片上点击检测点 #%1 的新位置").arg(pointIndex + 1), 5000);
+    setCursor(Qt::CrossCursor);
+}
+
+void MainWindow::confirmPointCoordinatePick(const QPoint& pos)
+{
+    if (pickingPointIndex < 0 || pickingPointIndex >= detectionPoints.size()) {
+        isPickingPointCoordinate = false;
+        pickingPointIndex = -1;
+        setCursor(Qt::ArrowCursor);
+        ui->statusbar->showMessage("错误: 检测点索引无效", 3000);
+        return;
+    }
+
+    const int pointIndex = pickingPointIndex;
+    const CoordinateFormat coordFormat = getCurrentCoordinateFormat();
+    const QString coordText = formatCoordinates(pos.x(), pos.y(), coordFormat);
+    const QString formatName = coordFormat == CoordinateFormat::Normalized ? "归一化坐标" : "像素坐标";
+
+    const auto confirm = QMessageBox::question(
+        this,
+        "确认修改坐标",
+        QString("要修改成的%1: %2\n\n确定修改检测点 #%3 吗？")
+            .arg(formatName)
+            .arg(coordText)
+            .arg(pointIndex + 1),
+        QMessageBox::Yes | QMessageBox::No);
+
+    isPickingPointCoordinate = false;
+    pickingPointIndex = -1;
+    setCursor(Qt::ArrowCursor);
+
+    if (confirm != QMessageBox::Yes) {
+        ui->statusbar->showMessage("已取消修改检测点坐标", 3000);
+        return;
+    }
+
+    moveDetectionPointTo(pointIndex, pos, coordFormat);
+    ui->statusbar->showMessage(QString("成功: 检测点 #%1 坐标已修改为 %2").arg(pointIndex + 1).arg(coordText), 3000);
+}
+
+void MainWindow::moveDetectionPointTo(int pointIndex, const QPoint& pos, CoordinateFormat coordFormat)
+{
+    if (pointIndex < 0 || pointIndex >= detectionPoints.size() || currentImage.isNull()) {
+        return;
+    }
+
+    DetectionPoint& point = detectionPoints[pointIndex];
+    const QColor newColor = getPixelColor(pos);
+
+    point.x = pos.x();
+    point.y = pos.y();
+    point.r = newColor.red();
+    point.g = newColor.green();
+    point.b = newColor.blue();
+    point.normX = double(point.x) / qMax(1, currentImage.width() - 1);
+    point.normY = double(point.y) / qMax(1, currentImage.height() - 1);
+    point.hasNormalized = true;
+    point.primaryCoord = coordFormat == CoordinateFormat::Normalized
+        ? DetectionPoint::PrimaryNormalized
+        : DetectionPoint::PrimaryPixel;
+
+    selectedPointIndex = pointIndex;
+    updatePointsList();
+    focusDetectionPoint(pointIndex, false);
+}
+
 void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
 {
     int index = ui->pointsList->row(item);
@@ -1424,6 +1532,7 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
 
         QWidget* xInputWidget = nullptr;
         QWidget* yInputWidget = nullptr;
+        bool pickFromImageRequested = false;
 
         if (coordFormat == CoordinateFormat::Normalized) {
             if (currentImage.isNull()) {
@@ -1512,6 +1621,16 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
             sizeHint->setStyleSheet("color: gray; font-size: 10px;");
             layout->addRow(sizeHint);
         }
+
+        QPushButton* pickCoordinateBtn = new QPushButton("点击图片修改坐标...", &dialog);
+        pickCoordinateBtn->setEnabled(!currentImage.isNull());
+        layout->addRow(pickCoordinateBtn);
+
+        connect(pickCoordinateBtn, &QPushButton::clicked, &dialog, [this, index, &dialog, &pickFromImageRequested]() {
+            pickFromImageRequested = true;
+            startPointCoordinatePick(index);
+            dialog.reject();
+        });
 
         // 颜色范围按钮
         QPushButton* colorRangeBtn = new QPushButton("颜色范围...", &dialog);
@@ -1732,7 +1851,12 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
         connect(buttonBox->button(QDialogButtonBox::Cancel), &QPushButton::clicked, &dialog, &QDialog::reject);
 
         // 显示对话框
-        if (dialog.exec() == QDialog::Accepted) {
+        const int dialogResult = dialog.exec();
+        if (pickFromImageRequested) {
+            return;
+        }
+
+        if (dialogResult == QDialog::Accepted) {
             // 更新坐标
             int newX, newY;
 

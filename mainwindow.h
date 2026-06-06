@@ -185,6 +185,8 @@ private:
     // Selected point index in the list (-1 means no selection)
     int selectedPointIndex = -1;
     QString pointSearchText;
+    bool isPickingPointCoordinate = false;
+    int pickingPointIndex = -1;
 
     // Current config file path (empty if not loaded/saved yet)
     QString currentConfigFilePath;
@@ -194,7 +196,11 @@ private:
     void applyPointSearchFilter();
     QString pointSearchHaystack(int pointIndex);
     void focusDetectionPoint(int pointIndex, bool centerImage);
+    bool imagePointFromGlobalPosition(const QPoint& globalPos, QPoint* imagePos) const;
     void addDetectionPoint(const QPoint& pos);
+    void startPointCoordinatePick(int pointIndex);
+    void confirmPointCoordinatePick(const QPoint& pos);
+    void moveDetectionPointTo(int pointIndex, const QPoint& pos, CoordinateFormat coordFormat);
     QColor getPixelColor(const QPoint& pos) const;
     void drawDetectionPoints();
     bool loadImageFile(const QString& filePath, bool keepFolderNavigation = false);
