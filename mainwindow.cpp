@@ -3140,8 +3140,10 @@ void MainWindow::openImageGroupsDialog()
     rightLayout->addWidget(rangeTable, 1);
 
     QHBoxLayout* bottomLayout = new QHBoxLayout();
+    QPushButton* clearAllGroupsBtn = new QPushButton("清空全部图片组", dialog);
     QPushButton* exportCsvBtn = new QPushButton("导出 CSV", dialog);
     QPushButton* closeBtn = new QPushButton("关闭", dialog);
+    bottomLayout->addWidget(clearAllGroupsBtn);
     bottomLayout->addStretch();
     bottomLayout->addWidget(exportCsvBtn);
     bottomLayout->addWidget(closeBtn);
@@ -3348,6 +3350,28 @@ void MainWindow::openImageGroupsDialog()
             QMessageBox::Yes | QMessageBox::No);
         if (result == QMessageBox::Yes) {
             imageGroups[groupIndex].clear();
+            (*refreshAll)();
+        }
+    });
+
+    connect(clearAllGroupsBtn, &QPushButton::clicked, dialog, [=]() {
+        int imageCount = 0;
+        for (const QStringList& group : imageGroups) {
+            imageCount += group.size();
+        }
+        if (imageCount == 0) {
+            return;
+        }
+
+        const auto result = QMessageBox::question(
+            dialog,
+            "确认清空",
+            QString("确定要清空全部图片组中的 %1 张图片吗?").arg(imageCount),
+            QMessageBox::Yes | QMessageBox::No);
+        if (result == QMessageBox::Yes) {
+            for (QStringList& group : imageGroups) {
+                group.clear();
+            }
             (*refreshAll)();
         }
     });
