@@ -57,13 +57,13 @@
     <message>
         <location filename="mainwindow.ui" line="88"/>
         <location filename="build/Mark_autogen/include/ui_mainwindow.h" line="481"/>
-        <source>设置HSL/HSV颜色格式中百分比显示的小数位数 (0-2位)</source>
+        <source>设置HSL/HSV颜色格式中颜色数值显示的小数位数 (0-2位)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="mainwindow.ui" line="104"/>
         <location filename="build/Mark_autogen/include/ui_mainwindow.h" line="484"/>
-        <source>HSL/HSV颜色格式中百分比显示的小数位数</source>
+        <source>HSL/HSV颜色格式中颜色数值显示的小数位数</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -49,6 +49,7 @@
 #include <limits>
 #include <functional>
 #include <memory>
+#include <cmath>
 
 namespace {
 constexpr const char* kSettingsOrganization = "Mark";
@@ -101,6 +102,28 @@ QString configDialogStartPath(const QString& path)
 
     const QFileInfo parent(info.absolutePath());
     return parent.exists() && parent.isDir() ? parent.absoluteFilePath() : "";
+}
+
+double hueFToDegrees(float hue)
+{
+    return hue < 0.0 ? 0.0 : static_cast<double>(hue) * 360.0;
+}
+
+float degreesToHueF(double degrees)
+{
+    if (!std::isfinite(degrees)) {
+        return 0.0f;
+    }
+    double wrapped = std::fmod(degrees, 360.0);
+    if (wrapped < 0.0) {
+        wrapped += 360.0;
+    }
+    return static_cast<float>(wrapped / 360.0);
+}
+
+int roundedHueDegrees(double degrees)
+{
+    return qBound(0, qRound(degrees), 359);
 }
 }
 
@@ -408,20 +431,21 @@ QString MainWindow::rgbToHex(int r, int g, int b)
 QString MainWindow::rgbToHsl(int r, int g, int b)
 {
     QColor color(r, g, b);
-    int h, s, l;
-    color.getHsl(&h, &s, &l);
+    float h, s, l;
+    color.getHslF(&h, &s, &l);
 
-    double sPercent = s / 2.55;
-    double lPercent = l / 2.55;
+    double hDeg = hueFToDegrees(h);
+    double sPercent = static_cast<double>(s) * 100.0;
+    double lPercent = static_cast<double>(l) * 100.0;
 
     if (colorDecimals == 0) {
         return QString("HSL(%1°, %2%, %3%)")
-            .arg(h < 0 ? 0 : h)
+            .arg(roundedHueDegrees(hDeg))
             .arg(qRound(sPercent))
             .arg(qRound(lPercent));
     } else {
         return QString("HSL(%1°, %2%, %3%)")
-            .arg(h < 0 ? 0 : h)
+            .arg(hDeg, 0, 'f', colorDecimals)
             .arg(sPercent, 0, 'f', colorDecimals)
             .arg(lPercent, 0, 'f', colorDecimals);
     }
@@ -430,20 +454,21 @@ QString MainWindow::rgbToHsl(int r, int g, int b)
 QString MainWindow::rgbToHsv(int r, int g, int b)
 {
     QColor color(r, g, b);
-    int h, s, v;
-    color.getHsv(&h, &s, &v);
+    float h, s, v;
+    color.getHsvF(&h, &s, &v);
 
-    double sPercent = s / 2.55;
-    double vPercent = v / 2.55;
+    double hDeg = hueFToDegrees(h);
+    double sPercent = static_cast<double>(s) * 100.0;
+    double vPercent = static_cast<double>(v) * 100.0;
 
     if (colorDecimals == 0) {
         return QString("HSV(%1°, %2%, %3%)")
-            .arg(h < 0 ? 0 : h)
+            .arg(roundedHueDegrees(hDeg))
             .arg(qRound(sPercent))
             .arg(qRound(vPercent));
     } else {
         return QString("HSV(%1°, %2%, %3%)")
-            .arg(h < 0 ? 0 : h)
+            .arg(hDeg, 0, 'f', colorDecimals)
             .arg(sPercent, 0, 'f', colorDecimals)
             .arg(vPercent, 0, 'f', colorDecimals);
     }
@@ -534,12 +559,12 @@ ColorFormat MainWindow::getCurrentColorFormat() const
 QList<double> MainWindow::rgbToHsvValues(int r, int g, int b) const
 {
     QColor color(r, g, b);
-    int h, s, v;
-    color.getHsv(&h, &s, &v);
+    float h, s, v;
+    color.getHsvF(&h, &s, &v);
 
-    double hDeg = (h < 0) ? 0.0 : static_cast<double>(h);
-    double sPercent = s / 2.55;
-    double vPercent = v / 2.55;
+    double hDeg = hueFToDegrees(h);
+    double sPercent = static_cast<double>(s) * 100.0;
+    double vPercent = static_cast<double>(v) * 100.0;
 
     return {hDeg, sPercent, vPercent};
 }
@@ -547,12 +572,12 @@ QList<double> MainWindow::rgbToHsvValues(int r, int g, int b) const
 QList<double> MainWindow::rgbToHslValues(int r, int g, int b) const
 {
     QColor color(r, g, b);
-    int h, s, l;
-    color.getHsl(&h, &s, &l);
+    float h, s, l;
+    color.getHslF(&h, &s, &l);
 
-    double hDeg = (h < 0) ? 0.0 : static_cast<double>(h);
-    double sPercent = s / 2.55;
-    double lPercent = l / 2.55;
+    double hDeg = hueFToDegrees(h);
+    double sPercent = static_cast<double>(s) * 100.0;
+    double lPercent = static_cast<double>(l) * 100.0;
 
     return {hDeg, sPercent, lPercent};
 }
@@ -570,18 +595,18 @@ QList<double> MainWindow::rgbToCmykValues(int r, int g, int b) const
 QList<int> MainWindow::hsvToRgb(double h, double s, double v) const
 {
     QColor color;
-    color.setHsv(static_cast<int>(h),
-                 static_cast<int>(s * 2.55),
-                 static_cast<int>(v * 2.55));
+    color.setHsvF(degreesToHueF(h),
+                  qBound(0.0, s / 100.0, 1.0),
+                  qBound(0.0, v / 100.0, 1.0));
     return {color.red(), color.green(), color.blue()};
 }
 
 QList<int> MainWindow::hslToRgb(double h, double s, double l) const
 {
     QColor color;
-    color.setHsl(static_cast<int>(h),
-                 static_cast<int>(s * 2.55),
-                 static_cast<int>(l * 2.55));
+    color.setHslF(degreesToHueF(h),
+                  qBound(0.0, s / 100.0, 1.0),
+                  qBound(0.0, l / 100.0, 1.0));
     return {color.red(), color.green(), color.blue()};
 }
 
@@ -673,15 +698,15 @@ QJsonArray DetectionPoint::toJson(CoordinateFormat xyFormat, ColorFormat colorFo
         }
 
         case ColorFormat::HSV: {
-            // 使用 MainWindow 的 rgbToHsvValues 方法
-            // 需要通过静态获取或作为参数传入，这里手动实现转换
             QColor color(r, g, b);
-            int h, s, v;
-            color.getHsv(&h, &s, &v);
-            double hDeg = (h < 0) ? 0.0 : static_cast<double>(h);
-            double sPercent = s / 2.55;
-            double vPercent = v / 2.55;
-            arr.append(QString::number(hDeg, 'f', colorDecimals).toDouble());
+            float h, s, v;
+            color.getHsvF(&h, &s, &v);
+            double hDeg = hueFToDegrees(h);
+            double sPercent = static_cast<double>(s) * 100.0;
+            double vPercent = static_cast<double>(v) * 100.0;
+            arr.append(colorDecimals == 0
+                       ? static_cast<double>(roundedHueDegrees(hDeg))
+                       : QString::number(hDeg, 'f', colorDecimals).toDouble());
             arr.append(QString::number(sPercent, 'f', colorDecimals).toDouble());
             arr.append(QString::number(vPercent, 'f', colorDecimals).toDouble());
             break;
@@ -689,12 +714,14 @@ QJsonArray DetectionPoint::toJson(CoordinateFormat xyFormat, ColorFormat colorFo
 
         case ColorFormat::HSL: {
             QColor color(r, g, b);
-            int h, s, l;
-            color.getHsl(&h, &s, &l);
-            double hDeg = (h < 0) ? 0.0 : static_cast<double>(h);
-            double sPercent = s / 2.55;
-            double lPercent = l / 2.55;
-            arr.append(QString::number(hDeg, 'f', colorDecimals).toDouble());
+            float h, s, l;
+            color.getHslF(&h, &s, &l);
+            double hDeg = hueFToDegrees(h);
+            double sPercent = static_cast<double>(s) * 100.0;
+            double lPercent = static_cast<double>(l) * 100.0;
+            arr.append(colorDecimals == 0
+                       ? static_cast<double>(roundedHueDegrees(hDeg))
+                       : QString::number(hDeg, 'f', colorDecimals).toDouble());
             arr.append(QString::number(sPercent, 'f', colorDecimals).toDouble());
             arr.append(QString::number(lPercent, 'f', colorDecimals).toDouble());
             break;
@@ -774,9 +801,9 @@ DetectionPoint DetectionPoint::fromJson(const QJsonArray& arr,
             double s = arr[3].toDouble();
             double v = arr[4].toDouble();
             QColor color;
-            color.setHsv(static_cast<int>(h),
-                        static_cast<int>(s * 2.55),
-                        static_cast<int>(v * 2.55));
+            color.setHsvF(degreesToHueF(h),
+                          qBound(0.0, s / 100.0, 1.0),
+                          qBound(0.0, v / 100.0, 1.0));
             point.r = color.red();
             point.g = color.green();
             point.b = color.blue();
@@ -788,9 +815,9 @@ DetectionPoint DetectionPoint::fromJson(const QJsonArray& arr,
             double s = arr[3].toDouble();
             double l = arr[4].toDouble();
             QColor color;
-            color.setHsl(static_cast<int>(h),
-                        static_cast<int>(s * 2.55),
-                        static_cast<int>(l * 2.55));
+            color.setHslF(degreesToHueF(h),
+                          qBound(0.0, s / 100.0, 1.0),
+                          qBound(0.0, l / 100.0, 1.0));
             point.r = color.red();
             point.g = color.green();
             point.b = color.blue();
@@ -1778,10 +1805,10 @@ void MainWindow::onPointsListItemDoubleClicked(QListWidgetItem *item)
                                 return QString::number(qRound(v));
                             return QString::number(v, 'f', colorDecimals);
                         }
-                        // HSV/HSL: H 是整数度数，S/V/L 是百分比
+                        // HSV/HSL: H is degrees, S/V/L are percentages.
                         if (i == 0) { // H
                             if (colorDecimals == 0)
-                                return QString::number(qRound(v));
+                                return QString::number(roundedHueDegrees(v));
                             return QString::number(v, 'f', colorDecimals);
                         }
                         return QString::number(v, 'f', qMax(colorDecimals, 1));
@@ -2655,45 +2682,37 @@ void MainWindow::onCopyPointClicked()
             break;
         case ColorFormat::HSL: {
             // HSL格式: [x,y,h,s,l]
-            QColor color(point.r, point.g, point.b);
-            int h, s, l;
-            color.getHsl(&h, &s, &l);
-            double sPercent = s / 2.55;
-            double lPercent = l / 2.55;
+            QList<double> values = rgbToHslValues(point.r, point.g, point.b);
             if (colorDecimals == 0) {
                 copyText = QString("[%1,%2,%3,%4]")
                     .arg(coordPart)
-                    .arg(h < 0 ? 0 : h)
-                    .arg(qRound(sPercent))
-                    .arg(qRound(lPercent));
+                    .arg(roundedHueDegrees(values[0]))
+                    .arg(qRound(values[1]))
+                    .arg(qRound(values[2]));
             } else {
                 copyText = QString("[%1,%2,%3,%4]")
                     .arg(coordPart)
-                    .arg(h < 0 ? 0 : h)
-                    .arg(sPercent, 0, 'f', colorDecimals)
-                    .arg(lPercent, 0, 'f', colorDecimals);
+                    .arg(values[0], 0, 'f', colorDecimals)
+                    .arg(values[1], 0, 'f', colorDecimals)
+                    .arg(values[2], 0, 'f', colorDecimals);
             }
             break;
         }
         case ColorFormat::HSV: {
             // HSV格式: [x,y,h,s,v]
-            QColor color(point.r, point.g, point.b);
-            int h, s, v;
-            color.getHsv(&h, &s, &v);
-            double sPercent = s / 2.55;
-            double vPercent = v / 2.55;
+            QList<double> values = rgbToHsvValues(point.r, point.g, point.b);
             if (colorDecimals == 0) {
                 copyText = QString("[%1,%2,%3,%4]")
                     .arg(coordPart)
-                    .arg(h < 0 ? 0 : h)
-                    .arg(qRound(sPercent))
-                    .arg(qRound(vPercent));
+                    .arg(roundedHueDegrees(values[0]))
+                    .arg(qRound(values[1]))
+                    .arg(qRound(values[2]));
             } else {
                 copyText = QString("[%1,%2,%3,%4]")
                     .arg(coordPart)
-                    .arg(h < 0 ? 0 : h)
-                    .arg(sPercent, 0, 'f', colorDecimals)
-                    .arg(vPercent, 0, 'f', colorDecimals);
+                    .arg(values[0], 0, 'f', colorDecimals)
+                    .arg(values[1], 0, 'f', colorDecimals)
+                    .arg(values[2], 0, 'f', colorDecimals);
             }
             break;
         }
@@ -3022,7 +3041,7 @@ bool MainWindow::exportImageGroupCsv(int groupIndex, const QString& filePath, QS
         }
 
         if (componentIndex == 0 && colorDecimals == 0) {
-            return QString::number(qRound(value));
+            return QString::number(roundedHueDegrees(value));
         }
         return QString::number(value, 'f', qMax(colorDecimals, 1));
     };
@@ -3249,7 +3268,7 @@ void MainWindow::openImageGroupsDialog()
             }
 
             if (componentIndex == 0 && colorDecimals == 0) {
-                return QString::number(qRound(value));
+                return QString::number(roundedHueDegrees(value));
             }
             return QString::number(value, 'f', qMax(colorDecimals, 1));
         };

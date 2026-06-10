@@ -92,7 +92,7 @@
              <string>HSL/HSV:</string>
             </property>
             <property name="toolTip">
-             <string>设置HSL/HSV颜色格式中百分比显示的小数位数 (0-2位)</string>
+             <string>设置HSL/HSV颜色格式中颜色数值显示的小数位数 (0-2位)</string>
             </property>
            </widget>
           </item>
@@ -108,7 +108,7 @@
              <number>0</number>
             </property>
             <property name="toolTip">
-             <string>HSL/HSV颜色格式中百分比显示的小数位数</string>
+             <string>HSL/HSV颜色格式中颜色数值显示的小数位数</string>
             </property>
            </widget>
           </item>

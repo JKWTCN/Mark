@@ -156,4 +156,4 @@ int main()
 | `normalized` | `hsl`     | `[normX, normY, h_度, s_%, l_%]` |
 | `normalized` | `cmyk`    | `[normX, normY, c, m, y, k]`     |
 
-HSV/HSL 值中色相为度数 (0-359)，饱和度/明度/亮度为百分比 (0-100)。CMYK 值为整数，范围与 Qt 返回值一致，为 0-255。
+HSV/HSL 值中色相为度数 (0 <= H < 360)，饱和度/明度/亮度为百分比 (0-100)。当 `colorDecimals` 大于 0 时，H/S/V/L 都会按该精度保留小数。CMYK 值为整数，范围与 Qt 返回值一致，为 0-255。
