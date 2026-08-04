@@ -3712,27 +3712,24 @@ void MainWindow::animatedZoomTo(double targetZoom, const QPoint& centerPos)
         zoomAnimation->stop();
     }
 
-    // 保存缩放中心点（用于动画过程中调整滚动条）
-    QPoint center = centerPos.isNull() ?
-        ui->scrollArea->viewport()->mapToGlobal(ui->scrollArea->viewport()->rect().center())
-        : centerPos;
+    // 保存 viewport 中的缩放中心点（用于动画过程中调整滚动条）
+    QWidget* viewport = ui->scrollArea->viewport();
+    const bool useViewportCenter = centerPos.isNull();
+    const QPoint viewportCenter = centerPos.isNull()
+        ? viewport->rect().center()
+        : viewport->mapFromGlobal(centerPos);
 
     QScrollBar* hBar = ui->scrollArea->horizontalScrollBar();
     QScrollBar* vBar = ui->scrollArea->verticalScrollBar();
 
-    // 计算中心点在原图上的归一化坐标
-    QPoint mousePos = ui->scrollArea->mapFromGlobal(center);
-    QPixmap pixmap = ui->imageLabel->pixmap();
-    int offsetX = 0;
-    int offsetY = 0;
-    if (!pixmap.isNull()) {
-        QSize scaledSize = pixmap.size();
-        offsetX = (ui->imageLabel->width() - scaledSize.width()) / 2;
-        offsetY = (ui->imageLabel->height() - scaledSize.height()) / 2;
-    }
-
-    double imageX = (mousePos.x() + hBar->value() - offsetX) / m_currentZoom;
-    double imageY = (mousePos.y() + vBar->value() - offsetY) / m_currentZoom;
+    // 直接通过控件坐标映射计算中心点在原图上的位置。这样即使图片
+    // 小于 viewport 时被布局居中，缩放后也不会因滚动条出现而跳动。
+    const QPoint labelCenter = ui->imageLabel->mapFrom(viewport, viewportCenter);
+    const double imageX = labelCenter.x() / m_currentZoom;
+    const double imageY = labelCenter.y() / m_currentZoom;
+    const QMargins contentMargins = ui->scrollAreaContents->layout()
+        ? ui->scrollAreaContents->layout()->contentsMargins()
+        : QMargins();
 
     // 配置动画
     zoomAnimation->setStartValue(m_currentZoom);
@@ -3743,18 +3740,16 @@ void MainWindow::animatedZoomTo(double targetZoom, const QPoint& centerPos)
     connect(zoomAnimation, &QPropertyAnimation::valueChanged, [=](const QVariant& value) {
         double newZoom = value.toDouble();
 
-        // 计算新的滚动条位置
-        QPixmap curPixmap = ui->imageLabel->pixmap();
-        int newOffsetX = 0;
-        int newOffsetY = 0;
-        if (!curPixmap.isNull()) {
-            QSize newScaledSize = curPixmap.size();
-            newOffsetX = (ui->imageLabel->width() - newScaledSize.width()) / 2;
-            newOffsetY = (ui->imageLabel->height() - newScaledSize.height()) / 2;
-        }
-
-        int newHScroll = static_cast<int>(imageX * newZoom + newOffsetX - mousePos.x());
-        int newVScroll = static_cast<int>(imageY * newZoom + newOffsetY - mousePos.y());
+        // imageLabel 改变尺寸后，布局几何可能要到事件循环的下一阶段才更新。
+        // 因此直接用图像坐标计算滚动位置，避免读取到上一帧的控件位置。
+        // 滚动条出现时 viewport 的尺寸也会变化，此时重新取可视区域中心。
+        const QPoint currentCenter = useViewportCenter
+            ? viewport->rect().center()
+            : viewport->mapFromGlobal(centerPos);
+        const int newHScroll = qRound(imageX * newZoom)
+            + contentMargins.left() - currentCenter.x();
+        const int newVScroll = qRound(imageY * newZoom)
+            + contentMargins.top() - currentCenter.y();
 
         hBar->setValue(qBound(hBar->minimum(), newHScroll, hBar->maximum()));
         vBar->setValue(qBound(vBar->minimum(), newVScroll, vBar->maximum()));
