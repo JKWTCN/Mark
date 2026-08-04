@@ -44,6 +44,7 @@
 #include <QInputDialog>
 #include <QTextStream>
 #include <QAbstractSpinBox>
+#include <QIntValidator>
 #include <QApplication>
 #include <QSettings>
 #include <limits>
@@ -165,8 +166,12 @@ MainWindow::MainWindow(QWidget *parent)
     nextImageShortcut = new QShortcut(Qt::Key_Right, this);
     prevImageShortcut->setEnabled(false);
     nextImageShortcut->setEnabled(false);
-    connect(prevImageShortcut, &QShortcut::activated, this, &MainWindow::previousImage);
-    connect(nextImageShortcut, &QShortcut::activated, this, &MainWindow::nextImage);
+    connect(prevImageShortcut, &QShortcut::activated, this, [this]() {
+        if (!ui->imageIndexEdit->hasFocus()) previousImage();
+    });
+    connect(nextImageShortcut, &QShortcut::activated, this, [this]() {
+        if (!ui->imageIndexEdit->hasFocus()) nextImage();
+    });
 
     // Keyboard shortcuts for save/load
     saveShortcut = new QShortcut(QKeySequence::Save, this);
@@ -921,6 +926,9 @@ void MainWindow::updateImageInfoDisplay()
 
 void MainWindow::setupConnections()
 {
+    ui->imageIndexEdit->setValidator(
+        new QIntValidator(1, std::numeric_limits<int>::max(), ui->imageIndexEdit));
+
     connect(ui->loadImageBtn, &QPushButton::clicked, this, &MainWindow::loadImage);
     connect(ui->imageGroupsBtn, &QPushButton::clicked, this, &MainWindow::openImageGroupsDialog);
     connect(ui->loadConfigBtn, &QPushButton::clicked, this, &MainWindow::loadConfig);
@@ -965,6 +973,8 @@ void MainWindow::setupConnections()
     connect(ui->loadFolderBtn, &QPushButton::clicked, this, &MainWindow::loadFolder);
     connect(ui->prevImageBtn, &QPushButton::clicked, this, &MainWindow::previousImage);
     connect(ui->nextImageBtn, &QPushButton::clicked, this, &MainWindow::nextImage);
+    connect(ui->imageIndexEdit, &QLineEdit::editingFinished,
+            this, &MainWindow::jumpToImageFromCounter);
     connect(ui->openInExplorerBtn, &QPushButton::clicked, this, &MainWindow::onOpenInExplorerClicked);
     connect(ui->selectInExplorerBtn, &QPushButton::clicked, this, &MainWindow::onSelectInExplorerClicked);
     connect(ui->copyImageBtn, &QPushButton::clicked, this, &MainWindow::onCopyImageClicked);
@@ -3622,16 +3632,40 @@ void MainWindow::updateNavigationButtons()
     ui->nextImageBtn->setEnabled(hasImages);
     prevImageShortcut->setEnabled(hasImages);
     nextImageShortcut->setEnabled(hasImages);
+    ui->imageIndexEdit->setEnabled(hasImages);
+}
+
+void MainWindow::jumpToImageFromCounter()
+{
+    if (imageFileList.isEmpty()) {
+        updateImageCounterDisplay();
+        return;
+    }
+
+    bool ok = false;
+    const int requestedImageNumber = ui->imageIndexEdit->text().toInt(&ok);
+    if (!ok) {
+        updateImageCounterDisplay();
+        return;
+    }
+
+    const int targetIndex = qBound(1, requestedImageNumber, imageFileList.size()) - 1;
+    if (targetIndex == currentImageIndex) {
+        updateImageCounterDisplay();
+        return;
+    }
+
+    loadImageAtIndex(targetIndex);
 }
 
 void MainWindow::updateImageCounterDisplay()
 {
     if (imageFileList.isEmpty() || currentImageIndex < 0) {
-        ui->imageCounterLabel->setText("-/-");
+        ui->imageIndexEdit->setText("-");
+        ui->imageTotalLabel->setText("/-");
     } else {
-        ui->imageCounterLabel->setText(
-            QString("%1/%2").arg(currentImageIndex + 1).arg(imageFileList.size())
-        );
+        ui->imageIndexEdit->setText(QString::number(currentImageIndex + 1));
+        ui->imageTotalLabel->setText(QString("/%1").arg(imageFileList.size()));
     }
 }
 

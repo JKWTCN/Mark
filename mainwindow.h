@@ -259,6 +259,7 @@ private:
 
     // Image navigation helper functions
     void loadImageAtIndex(int index);
+    void jumpToImageFromCounter();
     void updateNavigationButtons();
     void updateImageCounterDisplay();
 
